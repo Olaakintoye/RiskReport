@@ -35,48 +35,48 @@ export default function MobileLayout({ children, currentPath }: MobileLayoutProp
       </div>
 
       {/* Bottom Navigation Bar - Fixed */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-neutral-200 py-2 px-6">
-        <div className="flex justify-between">
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-neutral-200 py-2 px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
+        <div className="flex justify-between items-center">
           <Link href="/">
             <a className={cn(
-              "py-2 px-3 flex flex-col items-center",
-              isActive("/") && "cursor-default"
+              "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
+              isActive("/") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-home",
-                isActive("/") ? "text-primary" : "text-neutral-400"
+                "fas fa-tachometer-alt text-lg transition-transform",
+                isActive("/") ? "text-primary scale-110" : "text-neutral-400"
               )}></i>
               <span className={cn(
                 "text-xs mt-1",
                 isActive("/") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Home</span>
+              )}>Dashboard</span>
             </a>
           </Link>
           
           <Link href="/marketplace">
             <a className={cn(
-              "py-2 px-3 flex flex-col items-center",
-              isActive("/marketplace") && "cursor-default"
+              "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
+              isActive("/marketplace") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-store",
-                isActive("/marketplace") ? "text-primary" : "text-neutral-400"
+                "fas fa-certificate text-lg transition-transform",
+                isActive("/marketplace") ? "text-primary scale-110" : "text-neutral-400"
               )}></i>
               <span className={cn(
                 "text-xs mt-1",
                 isActive("/marketplace") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Explore</span>
+              )}>CDs</span>
             </a>
           </Link>
           
           <Link href="/portfolio">
             <a className={cn(
-              "py-2 px-3 flex flex-col items-center",
-              isActive("/portfolio") && "cursor-default"
+              "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
+              isActive("/portfolio") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-chart-pie",
-                isActive("/portfolio") ? "text-primary" : "text-neutral-400"
+                "fas fa-chart-line text-lg transition-transform",
+                isActive("/portfolio") ? "text-primary scale-110" : "text-neutral-400"
               )}></i>
               <span className={cn(
                 "text-xs mt-1",
@@ -87,12 +87,12 @@ export default function MobileLayout({ children, currentPath }: MobileLayoutProp
           
           <Link href="/account">
             <a className={cn(
-              "py-2 px-3 flex flex-col items-center",
-              isActive("/account") && "cursor-default"
+              "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
+              isActive("/account") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-user",
-                isActive("/account") ? "text-primary" : "text-neutral-400"
+                "fas fa-user-circle text-lg transition-transform",
+                isActive("/account") ? "text-primary scale-110" : "text-neutral-400"
               )}></i>
               <span className={cn(
                 "text-xs mt-1",
