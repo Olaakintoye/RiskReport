@@ -585,7 +585,7 @@ export class MemStorage implements IStorage {
   }
 }
 
-export class DatabaseStorage implements IStorage {
+export class SupabaseStorage implements IStorage {
   // User operations
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -816,4 +816,4 @@ const seedDatabase = async () => {
 };
 
 // Export the storage instance
-export const storage = new DatabaseStorage();
+export const storage = new SupabaseStorage();
