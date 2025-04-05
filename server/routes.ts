@@ -13,8 +13,14 @@ import {
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { addMonths } from "date-fns";
+import { setupAuth } from "./auth";
+import { log } from "./vite";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup Authentication
+  setupAuth(app);
+  log("Authentication routes registered", "express");
+  
   // API Routes
   const apiRouter = express.Router();
   app.use("/api", apiRouter);

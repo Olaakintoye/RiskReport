@@ -10,8 +10,15 @@ import {
 import { addMonths, format } from "date-fns";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+import createMemoryStore from "memorystore";
+import { supabase } from "./supabase-client";
+import { log } from "./vite";
 
 export interface IStorage {
+  // Session store
+  sessionStore: session.Store;
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -70,6 +77,9 @@ export class MemStorage implements IStorage {
   private notifications: Map<number, Notification>;
   private userPreferences: Map<number, UserPreference>;
   
+  // Session Store
+  public sessionStore: session.Store;
+  
   // Auto-incrementing IDs
   private userId: number;
   private bankId: number;
@@ -80,6 +90,12 @@ export class MemStorage implements IStorage {
   private userPrefId: number;
   
   constructor() {
+    // Initialize in-memory session store
+    const MemoryStore = createMemoryStore(session);
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
+    
     this.users = new Map();
     this.banks = new Map();
     this.cdProducts = new Map();
@@ -586,6 +602,19 @@ export class MemStorage implements IStorage {
 }
 
 export class SupabaseStorage implements IStorage {
+  // Session Store
+  public sessionStore: session.Store;
+  
+  constructor() {
+    // Initialize PostgreSQL session store
+    const PostgresSessionStore = connectPg(session);
+    this.sessionStore = new PostgresSessionStore({
+      conString: process.env.DATABASE_URL,
+      tableName: 'user_sessions',
+      createTableIfMissing: true,
+    });
+    log("Initialized PostgreSQL session store", "express");
+  }
   // User operations
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
