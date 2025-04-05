@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, numeric, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 // Users table
 export const users = pgTable("users", {
@@ -138,6 +139,79 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences).p
   emailNotifications: true,
   maturityPreference: true,
 });
+
+// Relations
+export const usersRelations = relations(users, ({ many, one }) => ({
+  investments: many(investments),
+  transactions: many(transactions),
+  notifications: many(notifications),
+  preferences: one(userPreferences, {
+    fields: [users.id],
+    references: [userPreferences.userId],
+  }),
+}));
+
+export const banksRelations = relations(banks, ({ many }) => ({
+  cdProducts: many(cdProducts),
+}));
+
+export const cdProductsRelations = relations(cdProducts, ({ one, many }) => ({
+  bank: one(banks, {
+    fields: [cdProducts.bankId],
+    references: [banks.id],
+  }),
+  investments: many(investments),
+}));
+
+export const investmentsRelations = relations(investments, ({ one, many }) => ({
+  user: one(users, {
+    fields: [investments.userId],
+    references: [users.id],
+  }),
+  cdProduct: one(cdProducts, {
+    fields: [investments.cdProductId],
+    references: [cdProducts.id],
+  }),
+  transactions: many(transactions, {
+    relationName: "investment_transactions",
+  }),
+  notifications: many(notifications, {
+    relationName: "investment_notifications",
+  }),
+}));
+
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+  user: one(users, {
+    fields: [transactions.userId],
+    references: [users.id],
+  }),
+  investment: one(investments, {
+    fields: [transactions.relatedInvestmentId],
+    references: [investments.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  investment: one(investments, {
+    fields: [notifications.relatedInvestmentId],
+    references: [investments.id],
+  }),
+  cdProduct: one(cdProducts, {
+    fields: [notifications.relatedCdProductId],
+    references: [cdProducts.id],
+  }),
+}));
+
+export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [userPreferences.userId],
+    references: [users.id],
+  }),
+}));
 
 // Type exports
 export type User = typeof users.$inferSelect;

@@ -8,6 +8,8 @@ import {
   userPreferences, type UserPreference, type InsertUserPreference
 } from "@shared/schema";
 import { addMonths, format } from "date-fns";
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -583,4 +585,235 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+  
+  // Bank operations
+  async getAllBanks(): Promise<Bank[]> {
+    return db.select().from(banks);
+  }
+  
+  async getBank(id: number): Promise<Bank | undefined> {
+    const [bank] = await db.select().from(banks).where(eq(banks.id, id));
+    return bank || undefined;
+  }
+  
+  async createBank(bank: InsertBank): Promise<Bank> {
+    const [newBank] = await db.insert(banks).values(bank).returning();
+    return newBank;
+  }
+  
+  // CD Product operations
+  async getAllCdProducts(): Promise<CdProduct[]> {
+    return db.select().from(cdProducts);
+  }
+  
+  async getCdProduct(id: number): Promise<CdProduct | undefined> {
+    const [product] = await db.select().from(cdProducts).where(eq(cdProducts.id, id));
+    return product || undefined;
+  }
+  
+  async getFeaturedCdProduct(): Promise<CdProduct | undefined> {
+    const [product] = await db.select().from(cdProducts).where(eq(cdProducts.isFeatured, true));
+    return product || undefined;
+  }
+  
+  async getTopCdProducts(limit: number): Promise<CdProduct[]> {
+    return db.select().from(cdProducts).orderBy(desc(cdProducts.apy)).limit(limit);
+  }
+  
+  async getCdProductsByBank(bankId: number): Promise<CdProduct[]> {
+    return db.select().from(cdProducts).where(eq(cdProducts.bankId, bankId));
+  }
+  
+  async createCdProduct(product: InsertCdProduct): Promise<CdProduct> {
+    const [newProduct] = await db.insert(cdProducts).values(product).returning();
+    return newProduct;
+  }
+  
+  // Investment operations
+  async getInvestment(id: number): Promise<Investment | undefined> {
+    const [investment] = await db.select().from(investments).where(eq(investments.id, id));
+    return investment || undefined;
+  }
+  
+  async getInvestmentsByUser(userId: number): Promise<Investment[]> {
+    return db.select().from(investments).where(eq(investments.userId, userId));
+  }
+  
+  async getActiveInvestmentsByUser(userId: number): Promise<Investment[]> {
+    return db.select()
+      .from(investments)
+      .where(and(
+        eq(investments.userId, userId),
+        eq(investments.status, 'active')
+      ));
+  }
+  
+  async createInvestment(investment: InsertInvestment): Promise<Investment> {
+    const [newInvestment] = await db.insert(investments).values({
+      ...investment,
+      interestEarned: "0",
+      status: 'active'
+    }).returning();
+    return newInvestment;
+  }
+  
+  async updateInvestment(id: number, updates: Partial<Investment>): Promise<Investment | undefined> {
+    const [updatedInvestment] = await db.update(investments)
+      .set(updates)
+      .where(eq(investments.id, id))
+      .returning();
+    return updatedInvestment || undefined;
+  }
+  
+  // Transaction operations
+  async getAllTransactionsByUser(userId: number): Promise<Transaction[]> {
+    return db.select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.createdAt));
+  }
+  
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    const [newTransaction] = await db.insert(transactions)
+      .values({
+        ...transaction,
+        createdAt: new Date()
+      })
+      .returning();
+    return newTransaction;
+  }
+  
+  // Notification operations
+  async getNotificationsByUser(userId: number): Promise<Notification[]> {
+    return db.select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+  
+  async getUnreadNotificationsByUser(userId: number): Promise<Notification[]> {
+    return db.select()
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ))
+      .orderBy(desc(notifications.createdAt));
+  }
+  
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(notifications)
+      .values({
+        ...notification,
+        isRead: false,
+        createdAt: new Date()
+      })
+      .returning();
+    return newNotification;
+  }
+  
+  async markNotificationAsRead(id: number): Promise<Notification | undefined> {
+    const [updatedNotification] = await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updatedNotification || undefined;
+  }
+  
+  // User Preferences operations
+  async getUserPreferences(userId: number): Promise<UserPreference | undefined> {
+    const [prefs] = await db.select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId));
+    return prefs || undefined;
+  }
+  
+  async createUserPreferences(prefs: InsertUserPreference): Promise<UserPreference> {
+    const [newPrefs] = await db.insert(userPreferences)
+      .values(prefs)
+      .returning();
+    return newPrefs;
+  }
+  
+  async updateUserPreferences(userId: number, updates: Partial<UserPreference>): Promise<UserPreference | undefined> {
+    const [updatedPrefs] = await db.update(userPreferences)
+      .set(updates)
+      .where(eq(userPreferences.userId, userId))
+      .returning();
+    return updatedPrefs || undefined;
+  }
+  
+  // Portfolio operations
+  async getUserPortfolioSummary(userId: number): Promise<{
+    totalInvested: number;
+    interestEarned: number;
+    avgApy: number;
+    projectedAnnualEarnings: number;
+  }> {
+    const userInvestments = await this.getActiveInvestmentsByUser(userId);
+    
+    if (userInvestments.length === 0) {
+      return {
+        totalInvested: 0,
+        interestEarned: 0,
+        avgApy: 0,
+        projectedAnnualEarnings: 0
+      };
+    }
+    
+    const totalInvested = userInvestments.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const interestEarned = userInvestments.reduce((sum, inv) => sum + Number(inv.interestEarned), 0);
+    
+    // Calculate weighted average APY
+    let weightedApySum = 0;
+    
+    for (const investment of userInvestments) {
+      const cdProduct = await this.getCdProduct(investment.cdProductId);
+      if (cdProduct) {
+        weightedApySum += Number(investment.amount) * Number(cdProduct.apy);
+      }
+    }
+    
+    const avgApy = weightedApySum / totalInvested;
+    const projectedAnnualEarnings = totalInvested * (avgApy / 100);
+    
+    return {
+      totalInvested,
+      interestEarned,
+      avgApy,
+      projectedAnnualEarnings
+    };
+  }
+}
+
+// TODO: Seed the database with mock data
+const seedDatabase = async () => {
+  // Create a test user
+  const user: InsertUser = {
+    username: 'alex',
+    password: 'password123',
+    email: 'alex.thompson@example.com',
+    fullName: 'Alex Thompson'
+  };
+  
+  // Add more seeding code as needed
+};
+
+// Export the storage instance
+export const storage = new DatabaseStorage();
