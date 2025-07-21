@@ -46,6 +46,9 @@
     ],
     "scheme": "cdinvestmentpro",
     "newArchEnabled": true,
+    "developmentClient": {
+      "silentLaunch": true
+    },
     "extra": {
       "router": {
         "origin": false
