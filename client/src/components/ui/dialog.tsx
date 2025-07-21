@@ -1,120 +1,124 @@
-import * as React from "react"
-import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X } from "lucide-react"
+import * as React from "react";
+import { Modal, View, Text, Pressable, StyleSheet, ViewStyle, TextStyle } from "react-native";
 
-import { cn } from "@/lib/utils"
+export interface DialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}
 
-const Dialog = DialogPrimitive.Root
+export interface DialogContentProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
+}
 
-const DialogTrigger = DialogPrimitive.Trigger
+export interface DialogHeaderProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
+}
 
-const DialogPortal = DialogPrimitive.Portal
+export interface DialogTitleProps {
+  children: React.ReactNode;
+  style?: TextStyle;
+}
 
-const DialogClose = DialogPrimitive.Close
+export interface DialogDescriptionProps {
+  children: React.ReactNode;
+  style?: TextStyle;
+}
 
-const DialogOverlay = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      className
-    )}
-    {...props}
-  />
-))
-DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
+export interface DialogFooterProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
+}
 
-const DialogContent = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-        className
-      )}
-      {...props}
+const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
+  return (
+    <Modal
+      visible={open}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => onOpenChange(false)}
     >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-))
-DialogContent.displayName = DialogPrimitive.Content.displayName
+      <View style={styles.overlay}>
+        <View style={styles.content}>
+          {children}
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
-const DialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left",
-      className
-    )}
-    {...props}
-  />
-)
-DialogHeader.displayName = "DialogHeader"
+const DialogContent = ({ children, style }: DialogContentProps) => {
+  return <View style={[styles.dialogContent, style]}>{children}</View>;
+};
 
-const DialogFooter = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      className
-    )}
-    {...props}
-  />
-)
-DialogFooter.displayName = "DialogFooter"
+const DialogHeader = ({ children, style }: DialogHeaderProps) => {
+  return <View style={[styles.header, style]}>{children}</View>;
+};
 
-const DialogTitle = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title
-    ref={ref}
-    className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
-      className
-    )}
-    {...props}
-  />
-))
-DialogTitle.displayName = DialogPrimitive.Title.displayName
+const DialogTitle = ({ children, style }: DialogTitleProps) => {
+  return <Text style={[styles.title, style]}>{children}</Text>;
+};
 
-const DialogDescription = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
-DialogDescription.displayName = DialogPrimitive.Description.displayName
+const DialogDescription = ({ children, style }: DialogDescriptionProps) => {
+  return <Text style={[styles.description, style]}>{children}</Text>;
+};
+
+const DialogFooter = ({ children, style }: DialogFooterProps) => {
+  return <View style={[styles.footer, style]}>{children}</View>;
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    width: '90%',
+    maxWidth: 500,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  dialogContent: {
+    gap: 16,
+  },
+  header: {
+    gap: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  description: {
+    fontSize: 14,
+    color: '#666',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
+  },
+});
 
 export {
   Dialog,
-  DialogPortal,
-  DialogOverlay,
-  DialogClose,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
-  DialogFooter,
   DialogTitle,
   DialogDescription,
-}
+  DialogFooter,
+};

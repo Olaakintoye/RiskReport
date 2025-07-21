@@ -352,6 +352,220 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(user);
   });
 
+  // VaR Analysis endpoints (added to fix network error)
+  apiRouter.post("/run-var", async (req: Request, res: Response) => {
+    try {
+      const { spawn } = require('child_process');
+      const path = require('path');
+      const fs = require('fs');
+      
+      const params = req.body;
+      console.log('Received VaR parameters:', params);
+      
+      // Extract parameters with default values for missing ones
+      const confidenceLevel = params.confidenceLevels || params.confidenceLevel || '0.95'; 
+      const timeHorizon = params.timeHorizon || 1;
+      const numSimulations = params.numSimulations || 10000;
+      const contractSize = params.contractSize || 50;
+      const numContracts = params.numContracts || 10;
+      const lookbackPeriod = params.lookbackPeriod || 5;
+      const varMethod = params.varMethod || 'monte-carlo';
+      
+      console.log('Running VaR analysis with validated params:', {
+        confidenceLevel,
+        timeHorizon,
+        numSimulations,
+        contractSize,
+        numContracts,
+        lookbackPeriod,
+        varMethod
+      });
+      
+      // Path to Python script
+      const pythonScript = path.join(__dirname, 'var_analysis.py');
+      
+      // Output file for the chart - make unique for each method
+      const methodPrefix = varMethod.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const outputFile = `${methodPrefix}_var_${Date.now()}.png`;
+      
+      // Command-line arguments for the Python script, ensuring all are strings
+      const args = [
+        '--confidence', String(confidenceLevel),
+        '--horizon', String(timeHorizon),
+        '--simulations', String(numSimulations),
+        '--contract-size', String(contractSize),
+        '--contracts', String(numContracts),
+        '--output', outputFile,
+        '--method', varMethod,
+        '--lookback', String(lookbackPeriod)
+      ];
+      
+      console.log(`Using ${lookbackPeriod} years of historical data for VaR calculation`);
+      console.log('Full Python command:', `python ${pythonScript} ${args.join(' ')}`);
+      
+      // Spawn Python process with 60 second timeout
+      const python = spawn('python', [pythonScript, ...args]);
+      
+      let dataString = '';
+      let errorString = '';
+      
+      // Set timeout for Python process
+      const timeout = setTimeout(() => {
+        python.kill('SIGTERM');
+        console.error('Python process timed out after 60 seconds');
+        res.status(408).json({ 
+          error: 'VaR analysis timed out', 
+          details: 'Python process exceeded 60 second limit' 
+        });
+      }, 60000);
+      
+             // Collect data from script
+       python.stdout.on('data', function (data: any) {
+         dataString += data.toString();
+         console.log('Python stdout:', data.toString());
+       });
+       
+       // Collect error data from script
+       python.stderr.on('data', function (data: any) {
+         errorString += data.toString();
+         console.error('Python stderr:', data.toString());
+       });
+       
+       // Handle script completion
+       python.on('close', (code: number) => {
+        clearTimeout(timeout);
+        
+        if (code !== 0) {
+          console.error(`Python script exited with code ${code}`);
+          console.error(`Error: ${errorString}`);
+          return res.status(500).json({ 
+            error: 'Error running VaR analysis', 
+            details: errorString 
+          });
+        }
+        
+        try {
+          // Check if image was generated
+          const outputFilePath = path.join(__dirname, outputFile);
+          const imageUrl = `/${outputFile}`;
+          
+          // Ensure public directory exists
+          const publicDir = path.join(__dirname, 'public');
+          if (!fs.existsSync(publicDir)) {
+            fs.mkdirSync(publicDir, { recursive: true });
+          }
+          
+          // Copy to public folder if it exists
+          if (fs.existsSync(outputFilePath)) {
+            const destPath = path.join(publicDir, outputFile);
+            fs.copyFileSync(outputFilePath, destPath);
+            fs.unlinkSync(outputFilePath); // Remove original
+          }
+          
+          // Check for JSON output
+          const jsonOutputFile = outputFile.replace('.png', '.json');
+          const jsonOutputPath = path.join(__dirname, jsonOutputFile);
+          
+          if (fs.existsSync(jsonOutputPath)) {
+            // Read the JSON data
+            const jsonData = fs.readFileSync(jsonOutputPath, 'utf8');
+            const results = JSON.parse(jsonData);
+            
+            // Copy JSON to public dir
+            fs.copyFileSync(jsonOutputPath, path.join(publicDir, jsonOutputFile));
+            fs.unlinkSync(jsonOutputPath); // Remove original
+            
+            return res.json({
+              success: true,
+              results: results,
+              chartUrl: imageUrl,
+              jsonUrl: `/${jsonOutputFile}`
+            });
+          }
+          
+          // Fallback response if no JSON output
+          res.json({
+            success: true,
+            message: 'VaR analysis completed',
+            chartUrl: imageUrl
+          });
+          
+                 } catch (parseError: any) {
+           console.error('Error processing VaR results:', parseError);
+           res.status(500).json({ 
+             error: 'Error processing VaR results', 
+             details: parseError.message 
+           });
+         }
+      });
+      
+             // Handle Python process errors
+       python.on('error', (error: any) => {
+        clearTimeout(timeout);
+        console.error('Python process error:', error);
+        res.status(500).json({ 
+          error: 'Failed to start Python process', 
+          details: error.message 
+        });
+      });
+      
+    } catch (error: any) {
+      console.error('Error in VaR analysis endpoint:', error);
+      res.status(500).json({ 
+        error: 'Internal server error', 
+        details: error.message 
+      });
+    }
+  });
+
+  // Static file serving for VaR charts
+  apiRouter.get("/charts", (req: Request, res: Response) => {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const publicDir = path.join(__dirname, 'public');
+    
+    if (!fs.existsSync(publicDir)) {
+      return res.json({ success: true, charts: [] });
+    }
+    
+    fs.readdir(publicDir, (err: any, files: string[]) => {
+      if (err) {
+        console.error('Error reading public directory:', err);
+        return res.status(500).json({ error: 'Failed to read charts directory' });
+      }
+      
+      // Filter for image files
+      const imageFiles = files.filter(file => 
+        file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')
+      );
+      
+      // Return the list of image files with full URLs
+      const imageUrls = imageFiles.map(file => `http://localhost:3001/${file}`);
+      
+      res.json({
+        success: true,
+        charts: imageUrls
+      });
+    });
+  });
+
+  // File existence check endpoint
+  apiRouter.get("/file-exists/:filename", (req: Request, res: Response) => {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, 'public', filename);
+    
+    fs.access(filePath, fs.constants.F_OK, (err: any) => {
+      if (err) {
+        return res.json({ exists: false, path: filePath });
+      }
+      res.json({ exists: true, path: filePath });
+    });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

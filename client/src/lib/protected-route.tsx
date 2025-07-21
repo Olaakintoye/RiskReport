@@ -1,29 +1,34 @@
-import { useAuth } from "@/hooks/use-auth";
-import { Loader2 } from "lucide-react";
-import { Redirect, Route } from "wouter";
+import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { useAuth } from "@/contexts/auth-context";
+import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { RootStackParamList } from '@/navigation-types';
 
-interface ProtectedRouteProps {
-  path: string;
+interface ProtectedScreenProps {
   component: React.ComponentType;
 }
 
-export function ProtectedRoute({
-  path,
-  component: Component,
-}: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+export function ProtectedScreen({ component: Component }: ProtectedScreenProps) {
+  const { user, loading } = useAuth();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
-  return (
-    <Route path={path}>
-      {isLoading ? (
-        <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : user ? (
-        <Component />
-      ) : (
-        <Redirect to="/auth" />
-      )}
-    </Route>
-  );
+  React.useEffect(() => {
+    if (!loading && !user) {
+      navigation.navigate('Auth');
+    }
+  }, [user, loading, navigation]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return <Component />;
 }

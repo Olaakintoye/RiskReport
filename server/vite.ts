@@ -6,8 +6,37 @@ import { createServer as createViteServer, createLogger } from "vite";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import { type Server } from "http";
-import viteConfig from "../vite.config";
+// Import vite config manually to avoid ESM/CommonJS issues
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import themePlugin from "@replit/vite-plugin-shadcn-theme-json";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { nanoid } from "nanoid";
+
+// Recreate vite config
+const viteConfig = defineConfig({
+  plugins: [
+    react(),
+    runtimeErrorOverlay(),
+    themePlugin(),
+    ...(process.env.NODE_ENV !== "production" &&
+    process.env.REPL_ID !== undefined
+      ? []
+      : []),
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "..", "client", "src"),
+      "@shared": path.resolve(__dirname, "..", "shared"),
+      "@assets": path.resolve(__dirname, "..", "attached_assets"),
+    },
+  },
+  root: path.resolve(__dirname, "..", "client"),
+  build: {
+    outDir: path.resolve(__dirname, "..", "dist/public"),
+    emptyOutDir: true,
+  },
+});
 
 const viteLogger = createLogger();
 
@@ -39,7 +68,10 @@ export async function setupVite(app: Express, server: Server) {
         process.exit(1);
       },
     },
-    server: serverOptions,
+    server: {
+      ...serverOptions,
+      allowedHosts: serverOptions.allowedHosts === true ? true : undefined,
+    },
     appType: "custom",
   });
 

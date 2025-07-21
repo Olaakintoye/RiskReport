@@ -1,6 +1,38 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useNavigation } from "@react-navigation/native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import CDCard from "@/components/ui/cd-card";
+
+interface Bank {
+  id: number;
+  name: string;
+  rating: number;
+  fdic_insured: boolean;
+  logo_type: string;
+  color: string;
+}
+
+interface CDProduct {
+  id: number;
+  bankId: number;
+  name: string;
+  termMonths: number;
+  apy: number;
+  minimumDeposit: number;
+  earlyWithdrawalPenalty: string;
+  description?: string;
+}
+
+interface Investment {
+  id: number;
+  amount: number;
+  startDate: string;
+  maturityDate: string;
+  interestEarned: number;
+  status: string;
+  cdProduct?: CDProduct;
+  bank?: Bank;
+}
 
 interface ActiveInvestmentsProps {
   userId: number;
@@ -8,77 +40,76 @@ interface ActiveInvestmentsProps {
 }
 
 export default function ActiveInvestments({ userId, limit }: ActiveInvestmentsProps) {
-  const { data: investments, isLoading } = useQuery({
+  const navigation = useNavigation();
+  const { data: investments, isLoading } = useQuery<Investment[]>({
     queryKey: [`/api/users/${userId}/active-investments`],
   });
 
   if (isLoading) {
     return (
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-semibold">Active Investments</h2>
-          <Link href="/portfolio">
-            <a className="text-primary text-sm font-medium">See All</a>
-          </Link>
-        </div>
-        <div className="space-y-3">
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Active Investments</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Rank' as never)}>
+            <Text style={styles.link}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="bg-white border border-neutral-200 rounded-lg p-4 animate-pulse">
-              <div className="flex justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-neutral-200 rounded-lg mr-3"></div>
-                  <div>
-                    <div className="h-4 bg-neutral-200 rounded w-24 mb-2"></div>
-                    <div className="h-3 bg-neutral-200 rounded w-16"></div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="h-4 bg-neutral-200 rounded w-20 mb-2"></div>
-                  <div className="h-3 bg-neutral-200 rounded w-12"></div>
-                </div>
-              </div>
-              <div className="w-full bg-neutral-200 rounded-full h-2 mb-3"></div>
-              <div className="flex justify-between">
-                <div className="h-3 bg-neutral-200 rounded w-20"></div>
-                <div className="h-3 bg-neutral-200 rounded w-20"></div>
-              </div>
-            </div>
+            <View key={i} style={styles.loadingCard}>
+              <View style={styles.loadingHeader}>
+                <View style={styles.loadingLeft}>
+                  <View style={styles.loadingIcon} />
+                  <View>
+                    <View style={styles.loadingText} />
+                    <View style={styles.loadingSubtext} />
+                  </View>
+                </View>
+                <View style={styles.loadingRight}>
+                  <View style={styles.loadingText} />
+                  <View style={styles.loadingSubtext} />
+                </View>
+              </View>
+              <View style={styles.loadingProgress} />
+              <View style={styles.loadingFooter}>
+                <View style={styles.loadingText} />
+                <View style={styles.loadingText} />
+              </View>
+            </View>
           ))}
-        </div>
-      </div>
+        </View>
+      </View>
     );
   }
 
-  const displayInvestments = limit ? investments?.slice(0, limit) : investments;
+  const displayInvestments = limit && investments ? investments.slice(0, limit) : investments;
 
   if (!displayInvestments || displayInvestments.length === 0) {
     return (
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-semibold">Active Investments</h2>
-        </div>
-        <div className="bg-white border border-neutral-200 rounded-lg p-6 text-center">
-          <p className="text-neutral-500">You have no active investments.</p>
-          <Link href="/marketplace">
-            <a className="mt-2 inline-block text-primary font-medium">
-              Browse the Marketplace
-            </a>
-          </Link>
-        </div>
-      </div>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Active Investments</Text>
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>You have no active investments.</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Marketplace' as never)}>
+            <Text style={styles.marketplaceLink}>Browse the Marketplace</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-semibold">Active Investments</h2>
-        {investments?.length > (limit || 0) && (
-          <Link href="/portfolio">
-            <a className="text-primary text-sm font-medium">See All</a>
-          </Link>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Active Investments</Text>
+        {investments && investments.length > (limit || 0) && (
+          <TouchableOpacity onPress={() => navigation.navigate('Rank' as never)}>
+            <Text style={styles.link}>See All</Text>
+          </TouchableOpacity>
         )}
-      </div>
+      </View>
 
       {displayInvestments.map((investment) => (
         <CDCard 
@@ -86,6 +117,98 @@ export default function ActiveInvestments({ userId, limit }: ActiveInvestmentsPr
           investment={investment} 
         />
       ))}
-    </div>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  link: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    gap: 12,
+  },
+  loadingCard: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    padding: 16,
+  },
+  loadingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  loadingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingRight: {
+    alignItems: 'flex-end',
+  },
+  loadingIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  loadingText: {
+    height: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: 100,
+  },
+  loadingSubtext: {
+    height: 12,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 4,
+    width: 80,
+  },
+  loadingProgress: {
+    height: 4,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 2,
+    marginBottom: 16,
+  },
+  loadingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  emptyState: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: '#666',
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  marketplaceLink: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});

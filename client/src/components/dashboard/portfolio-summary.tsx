@@ -1,47 +1,138 @@
 import { formatCurrency } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { View, Text, StyleSheet } from "react-native";
 
 interface PortfolioSummaryProps {
   userId: number;
 }
 
+interface PortfolioSummary {
+  totalInvested: number;
+  interestEarned: number;
+}
+
 export default function PortfolioSummary({ userId }: PortfolioSummaryProps) {
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading } = useQuery<PortfolioSummary>({
     queryKey: [`/api/users/${userId}/portfolio-summary`],
   });
 
   if (isLoading) {
     return (
-      <div className="bg-primary p-4 rounded-xl text-white mb-6 animate-pulse">
-        <div className="h-6 bg-white/20 rounded w-1/3 mb-4"></div>
-        <div className="h-8 bg-white/20 rounded w-2/3 mb-4"></div>
-        <div className="h-6 bg-white/20 rounded w-full"></div>
-      </div>
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingTitle} />
+        <View style={styles.loadingAmount} />
+        <View style={styles.loadingFooter} />
+      </View>
     );
   }
 
   return (
-    <div className="bg-primary p-4 rounded-xl text-white mb-6">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="font-medium">Total Balance</h2>
-        <i className="fas fa-eye-slash"></i>
-      </div>
-      <p className="font-mono text-3xl font-bold mb-1">
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Total Balance</Text>
+        <Text style={styles.eyeIcon}>👁️</Text>
+      </View>
+      <Text style={styles.amount}>
         {formatCurrency(summary?.totalInvested || 0)}
-      </p>
-      <div className="flex justify-between items-center">
-        <div>
-          <span className="text-xs text-primary-light bg-white/20 rounded-full px-2 py-1">
-            <i className="fas fa-arrow-up text-xs"></i> 3.2% this month
-          </span>
-        </div>
-        <div className="text-sm">
-          <span className="text-primary-light">Interest earned: </span>
-          <span className="font-mono font-medium">
+      </Text>
+      <View style={styles.footer}>
+        <View style={styles.growthContainer}>
+          <Text style={styles.growthText}>
+            <Text style={styles.arrow}>↑</Text> 3.2% this month
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.interestLabel}>Interest earned: </Text>
+          <Text style={styles.interestAmount}>
             {formatCurrency(summary?.interestEarned || 0)}
-          </span>
-        </div>
-      </div>
-    </div>
+          </Text>
+        </View>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  title: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  eyeIcon: {
+    color: 'white',
+    fontSize: 16,
+  },
+  amount: {
+    color: 'white',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'monospace',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  growthContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  growthText: {
+    color: 'white',
+    fontSize: 12,
+  },
+  arrow: {
+    fontSize: 12,
+  },
+  interestLabel: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+  },
+  interestAmount: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'monospace',
+  },
+  loadingContainer: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  loadingTitle: {
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+    width: '33%',
+    marginBottom: 16,
+  },
+  loadingAmount: {
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+    width: '66%',
+    marginBottom: 16,
+  },
+  loadingFooter: {
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+    width: '100%',
+  },
+});

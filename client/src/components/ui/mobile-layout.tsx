@@ -69,19 +69,35 @@ export default function MobileLayout({ children, currentPath }: MobileLayoutProp
             </a>
           </Link>
           
-          <Link href="/portfolio">
+          <Link href="/rank">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/portfolio") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/rank") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-chart-line text-lg transition-transform",
-                isActive("/portfolio") ? "text-primary scale-110" : "text-neutral-400"
+                "fas fa-trophy text-lg transition-transform",
+                isActive("/rank") ? "text-primary scale-110" : "text-neutral-400"
               )}></i>
               <span className={cn(
                 "text-xs mt-1",
-                isActive("/portfolio") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Portfolio</span>
+                isActive("/rank") ? "text-primary font-medium" : "text-neutral-400"
+              )}>Rankings</span>
+            </a>
+          </Link>
+          
+          <Link href="/var">
+            <a className={cn(
+              "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
+              isActive("/var") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+            )}>
+              <i className={cn(
+                "fas fa-chart-line text-lg transition-transform",
+                isActive("/var") ? "text-primary scale-110" : "text-neutral-400"
+              )}></i>
+              <span className={cn(
+                "text-xs mt-1",
+                isActive("/var") ? "text-primary font-medium" : "text-neutral-400"
+              )}>VAR</span>
             </a>
           </Link>
           

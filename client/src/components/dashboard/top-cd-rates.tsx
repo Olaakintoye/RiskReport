@@ -1,42 +1,56 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useNavigation } from "@react-navigation/native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 
+interface Bank {
+  name: string;
+}
+
+interface CDProduct {
+  id: number;
+  bank: Bank;
+  termMonths: number;
+  apy: number;
+  minimumDeposit: number;
+}
+
 export default function TopCDRates() {
-  const { data: topCDs, isLoading } = useQuery({
+  const navigation = useNavigation();
+  const { data: topCDs, isLoading } = useQuery<CDProduct[]>({
     queryKey: ['/api/cd-products/top'],
   });
 
   if (isLoading) {
     return (
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-semibold">Top CD Rates Today</h2>
-          <Link href="/marketplace">
-            <a className="text-primary text-sm font-medium">Marketplace</a>
-          </Link>
-        </div>
-        <div className="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden animate-pulse">
-          <div className="bg-neutral-100 p-3">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="h-4 bg-neutral-200 rounded"></div>
-              <div className="h-4 bg-neutral-200 rounded"></div>
-              <div className="h-4 bg-neutral-200 rounded"></div>
-              <div className="h-4 bg-neutral-200 rounded"></div>
-            </div>
-          </div>
-          <div className="p-3 space-y-4">
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Top CD Rates Today</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Marketplace' as never)}>
+            <Text style={styles.marketplaceLink}>Marketplace</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingCard}>
+          <View style={styles.loadingHeader}>
+            <View style={styles.loadingRow}>
+              <View style={styles.loadingCell} />
+              <View style={styles.loadingCell} />
+              <View style={styles.loadingCell} />
+              <View style={styles.loadingCell} />
+            </View>
+          </View>
+          <View style={styles.loadingBody}>
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="grid grid-cols-4 gap-4">
-                <div className="h-4 bg-neutral-200 rounded"></div>
-                <div className="h-4 bg-neutral-200 rounded"></div>
-                <div className="h-4 bg-neutral-200 rounded"></div>
-                <div className="h-4 bg-neutral-200 rounded"></div>
-              </div>
+              <View key={i} style={styles.loadingRow}>
+                <View style={styles.loadingCell} />
+                <View style={styles.loadingCell} />
+                <View style={styles.loadingCell} />
+                <View style={styles.loadingCell} />
+              </View>
             ))}
-          </div>
-        </div>
-      </div>
+          </View>
+        </View>
+      </View>
     );
   }
 
@@ -45,35 +59,122 @@ export default function TopCDRates() {
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-semibold">Top CD Rates Today</h2>
-        <Link href="/marketplace">
-          <a className="text-primary text-sm font-medium">Marketplace</a>
-        </Link>
-      </div>
-      <div className="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-100">
-            <tr>
-              <th className="py-3 px-4 text-left font-medium">Bank</th>
-              <th className="py-3 px-2 text-center font-medium">Term</th>
-              <th className="py-3 px-2 text-right font-medium">APY</th>
-              <th className="py-3 px-4 text-right font-medium">Min. Deposit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topCDs.map((cd, index) => (
-              <tr key={cd.id} className={index < topCDs.length - 1 ? "border-b border-neutral-200" : ""}>
-                <td className="py-3 px-4 font-medium">{cd.bank.name}</td>
-                <td className="py-3 px-2 text-center">{cd.termMonths} Mo</td>
-                <td className="py-3 px-2 text-right text-success font-medium">{formatPercentage(cd.apy)}</td>
-                <td className="py-3 px-4 text-right font-mono">{formatCurrency(cd.minimumDeposit)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Top CD Rates Today</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Marketplace' as never)}>
+          <Text style={styles.marketplaceLink}>Marketplace</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.card}>
+        <View style={styles.tableHeader}>
+          <Text style={styles.headerCell}>Bank</Text>
+          <Text style={styles.headerCell}>Term</Text>
+          <Text style={styles.headerCell}>APY</Text>
+          <Text style={styles.headerCell}>Min. Deposit</Text>
+        </View>
+        <View style={styles.tableBody}>
+          {topCDs.map((cd, index) => (
+            <View 
+              key={cd.id} 
+              style={[
+                styles.tableRow,
+                index < topCDs.length - 1 && styles.borderBottom
+              ]}
+            >
+              <Text style={styles.cell}>{cd.bank.name}</Text>
+              <Text style={styles.cell}>{cd.termMonths} Mo</Text>
+              <Text style={[styles.cell, styles.successText]}>{formatPercentage(cd.apy)}</Text>
+              <Text style={styles.cell}>{formatCurrency(cd.minimumDeposit)}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  marketplaceLink: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  loadingCard: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  loadingHeader: {
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+  },
+  loadingBody: {
+    padding: 12,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  loadingCell: {
+    height: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 4,
+    width: '20%',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+  },
+  headerCell: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'left',
+  },
+  tableBody: {
+    padding: 12,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  borderBottom: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  cell: {
+    flex: 1,
+    fontSize: 14,
+    textAlign: 'left',
+  },
+  successText: {
+    color: '#34C759',
+    fontWeight: '500',
+  },
+});

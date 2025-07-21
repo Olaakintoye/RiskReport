@@ -55,3 +55,47 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Add type definitions for our API responses
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+export interface Bank {
+  id: number;
+  name: string;
+  rating: number;
+  fdic_insured: boolean;
+  logo_type: string;
+  color: string;
+}
+
+export interface CDProduct {
+  id: number;
+  bankId: number;
+  name: string;
+  termMonths: number;
+  apy: number;
+  minimumDeposit: number;
+  earlyWithdrawalPenalty: string;
+  description?: string;
+  isFeatured: boolean;
+  bank?: Bank;
+}
+
+export interface Investment {
+  id: number;
+  userId: number;
+  cdProductId: number;
+  amount: number;
+  startDate: string;
+  maturityDate: string;
+  interestEarned: number;
+  status: string;
+  cdProduct?: CDProduct;
+}

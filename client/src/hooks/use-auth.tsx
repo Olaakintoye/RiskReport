@@ -1,119 +1,122 @@
-import { createContext, ReactNode, useContext } from "react";
-import {
-  useQuery,
-  useMutation,
-  UseMutationResult,
-} from "@tanstack/react-query";
-import { InsertUser, User } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import * as React from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { AuthUser } from '../lib/supabase';
+import { User } from '@supabase/supabase-js';
 
-type AuthContextType = {
-  user: User | null;
-  isLoading: boolean;
-  error: Error | null;
-  loginMutation: UseMutationResult<Omit<User, "password">, Error, LoginData>;
-  logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<Omit<User, "password">, Error, InsertUser>;
-};
+interface AuthContextType {
+  user: AuthUser | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, username?: string) => Promise<User | null>;
+  signOut: () => Promise<void>;
+}
 
-type LoginData = Pick<InsertUser, "username" | "password">;
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthContext = createContext<AuthContextType | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { toast } = useToast();
-  const {
-    data: user,
-    error,
-    isLoading,
-  } = useQuery<User | undefined, Error>({
-    queryKey: ["/api/auth/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
+  useEffect(() => {
+    // Check active sessions and sets the user
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email!,
+          fullName: session.user.user_metadata.fullName || '',
+          isVerified: session.user.email_confirmed_at !== null,
+        });
+      }
+      setLoading(false);
+    });
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
-    },
-    onSuccess: (user: Omit<User, "password">) => {
-      queryClient.setQueryData(["/api/auth/user"], user);
-      toast({
-        title: "Login successful",
-        description: `Welcome back, ${user.fullName || user.username}!`,
+    // Listen for changes on auth state (sign in, sign out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email!,
+          fullName: session.user.user_metadata.fullName || '',
+          isVerified: session.user.email_confirmed_at !== null,
+        });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, username?: string) => {
+    try {
+      console.log('Starting signup process for email:', email);
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            fullName,
+            username: username || fullName.toLowerCase().replace(/[^a-z0-9]/g, ''),
+          },
+        },
       });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Login failed",
-        description: error.message || "Invalid username or password",
-        variant: "destructive",
-      });
-    },
-  });
 
-  const registerMutation = useMutation({
-    mutationFn: async (credentials: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
-    },
-    onSuccess: (user: Omit<User, "password">) => {
-      queryClient.setQueryData(["/api/auth/user"], user);
-      toast({
-        title: "Registration successful",
-        description: `Welcome to CD Investments, ${user.fullName || user.username}!`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Registration failed",
-        description: error.message || "Could not create account. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
+      if (authError) {
+        console.error('Auth signup error details:', {
+          message: authError.message,
+          status: authError.status,
+          name: authError.name
+        });
+        throw authError;
+      }
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(["/api/auth/user"], null);
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Logout failed",
-        description: error.message || "Could not log out. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
+      console.log('Auth signup successful');
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user: user ?? null,
-        isLoading,
-        error,
-        loginMutation,
-        logoutMutation,
-        registerMutation,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+      if (!authData.user?.email_confirmed_at) {
+        console.log('Email confirmation required');
+        throw new Error('Please check your email to verify your account before signing in.');
+      }
+
+      return authData.user;
+    } catch (error) {
+      console.error('Signup process error details:', error);
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  const value = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+  };
+
+  return React.createElement(AuthContext.Provider, { value }, children);
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+} 

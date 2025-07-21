@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Portfolio VaR API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+        }
+        .assets-container {
+            margin-top: 10px;
+        }
+        .asset-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .asset-row input {
+            flex: 1;
+            margin-right: 5px;
+        }
+        .asset-row button {
+            background-color: #f44336;
+            margin-left: 5px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Portfolio VaR API</h1>
+        
+        <div class="form-group">
+            <label for="confidence">Confidence Level:</label>
+            <input type="text" id="confidence" value="0.95">
+        </div>
+        
+        <div class="form-group">
+            <label for="timeHorizon">Time Horizon (days):</label>
+            <input type="number" id="timeHorizon" value="1">
+        </div>
+        
+        <div class="form-group">
+            <label for="simulations">Number of Simulations:</label>
+            <input type="number" id="simulations" value="10000">
+        </div>
+        
+        <div class="form-group">
+            <label for="lookback">Lookback Period (years):</label>
+            <input type="number" id="lookback" value="5">
+        </div>
+        
+        <div class="form-group">
+            <label for="method">VaR Method:</label>
+            <select id="method">
+                <option value="monte-carlo">Monte Carlo</option>
+                <option value="parametric">Parametric</option>
+                <option value="historical">Historical</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="distribution">Distribution:</label>
+            <select id="distribution">
+                <option value="normal">Normal</option>
+                <option value="t">t-distribution</option>
+                <option value="historical">Historical</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="portfolioName">Portfolio Name:</label>
+            <input type="text" id="portfolioName" value="Test Portfolio">
+        </div>
+        
+        <div class="form-group">
+            <label>Portfolio Assets:</label>
+            <div id="assets" class="assets-container">
+                <!-- Asset rows will be added here -->
+            </div>
+            <button type="button" onclick="addAsset()">Add Asset</button>
+        </div>
+        
+        <button type="button" onclick="runTest()">Run VaR Analysis</button>
+        
+        <div id="result"></div>
+        
+        <div id="chartContainer" style="margin-top: 20px; text-align: center; display: none;">
+            <h2>Chart</h2>
+            <img id="chartImage" style="max-width: 100%; border: 1px solid #ddd;" />
+        </div>
+    </div>
+    
+    <script>
+        // Default assets
+        const defaultAssets = [
+            { symbol: 'AAPL', name: 'Apple Inc.', quantity: 100, price: 175.50 },
+            { symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 50, price: 325.75 },
+            { symbol: 'GOOGL', name: 'Alphabet Inc.', quantity: 25, price: 135.60 },
+            { symbol: 'AMZN', name: 'Amazon.com Inc.', quantity: 30, price: 128.90 }
+        ];
+        
+        // Add default assets when page loads
+        window.onload = function() {
+            defaultAssets.forEach(asset => {
+                addAssetRow(asset.symbol, asset.name, asset.quantity, asset.price);
+            });
+        };
+        
+        function addAsset() {
+            addAssetRow('', '', 0, 0);
+        }
+        
+        function addAssetRow(symbol, name, quantity, price) {
+            const assetsDiv = document.getElementById('assets');
+            const assetRow = document.createElement('div');
+            assetRow.className = 'asset-row';
+            
+            const symbolInput = document.createElement('input');
+            symbolInput.type = 'text';
+            symbolInput.placeholder = 'Symbol';
+            symbolInput.value = symbol;
+            symbolInput.className = 'symbol';
+            
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.placeholder = 'Name';
+            nameInput.value = name;
+            nameInput.className = 'name';
+            
+            const quantityInput = document.createElement('input');
+            quantityInput.type = 'number';
+            quantityInput.placeholder = 'Quantity';
+            quantityInput.value = quantity;
+            quantityInput.className = 'quantity';
+            
+            const priceInput = document.createElement('input');
+            priceInput.type = 'number';
+            priceInput.placeholder = 'Price';
+            priceInput.value = price;
+            priceInput.step = '0.01';
+            priceInput.className = 'price';
+            
+            const removeButton = document.createElement('button');
+            removeButton.innerHTML = 'X';
+            removeButton.onclick = function() {
+                assetsDiv.removeChild(assetRow);
+            };
+            
+            assetRow.appendChild(symbolInput);
+            assetRow.appendChild(nameInput);
+            assetRow.appendChild(quantityInput);
+            assetRow.appendChild(priceInput);
+            assetRow.appendChild(removeButton);
+            
+            assetsDiv.appendChild(assetRow);
+        }
+        
+        function collectAssets() {
+            const assets = [];
+            const assetRows = document.querySelectorAll('.asset-row');
+            
+            assetRows.forEach(row => {
+                const symbol = row.querySelector('.symbol').value;
+                const name = row.querySelector('.name').value;
+                const quantity = parseFloat(row.querySelector('.quantity').value);
+                const price = parseFloat(row.querySelector('.price').value);
+                
+                if (symbol && quantity && price) {
+                    assets.push({
+                        symbol,
+                        name: name || symbol,
+                        quantity,
+                        price,
+                        assetClass: 'Equity'  // Default asset class
+                    });
+                }
+            });
+            
+            return assets;
+        }
+        
+        function calculatePortfolioValue(assets) {
+            return assets.reduce((sum, asset) => sum + (asset.price * asset.quantity), 0);
+        }
+        
+        async function runTest() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Running VaR analysis...';
+            
+            const confidence = document.getElementById('confidence').value;
+            const timeHorizon = document.getElementById('timeHorizon').value;
+            const simulations = document.getElementById('simulations').value;
+            const lookback = document.getElementById('lookback').value;
+            const method = document.getElementById('method').value;
+            const distribution = document.getElementById('distribution').value;
+            const portfolioName = document.getElementById('portfolioName').value;
+            
+            const assets = collectAssets();
+            if (assets.length === 0) {
+                resultDiv.innerHTML = '<span class="error">Error: Add at least one asset</span>';
+                return;
+            }
+            
+            const portfolioValue = calculatePortfolioValue(assets);
+            
+            const portfolio = {
+                id: 'web-test-' + Date.now(),
+                name: portfolioName,
+                assets: assets
+            };
+            
+            const requestData = {
+                confidenceLevel: confidence,
+                timeHorizon: timeHorizon,
+                numSimulations: simulations,
+                lookbackPeriod: lookback,
+                varMethod: method,
+                distribution: distribution,
+                portfolio: portfolio
+            };
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/run-var', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const result = data.results;
+                    let output = '<span class="success">Success!</span>\n\n';
+                    output += `Expected Portfolio Value: $${portfolioValue.toFixed(2)}\n`;
+                    output += `Server Portfolio Value: $${result.portfolioValue.toFixed(2)}\n\n`;
+                    
+                    if (Math.abs(result.portfolioValue - portfolioValue) < 0.01) {
+                        output += '<span class="success">✅ Portfolio value matches expected value!</span>\n\n';
+                    } else {
+                        output += '<span class="error">❌ Portfolio value does not match expected value!</span>\n\n';
+                    }
+                    
+                    output += `VaR (${confidence}): $${result.var.toFixed(2)}\n`;
+                    output += `VaR as % of portfolio: ${result.varPercentage.toFixed(2)}%\n`;
+                    output += `CVaR (${confidence}): $${result.cvar.toFixed(2)}\n`;
+                    output += `CVaR as % of portfolio: ${result.cvarPercentage.toFixed(2)}%\n`;
+                    
+                    resultDiv.innerHTML = output;
+                    
+                    // Show chart if available
+                    if (data.chartUrl) {
+                        document.getElementById('chartContainer').style.display = 'block';
+                        document.getElementById('chartImage').src = `http://localhost:3001${data.chartUrl}?t=${Date.now()}`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<span class="error">Error: ${data.error || 'Unknown error'}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
 interface QuickActionsProps {
   onDeposit: () => void;
@@ -22,33 +23,76 @@ export default function QuickActions({ onDeposit, onWithdraw, onRedeem }: QuickA
   };
 
   return (
-    <div className="grid grid-cols-3 gap-3 mb-6">
-      <button 
-        onClick={() => handleAction("deposit", onDeposit)}
-        className="bg-white border border-neutral-200 rounded-lg p-3 flex flex-col items-center shadow-sm">
-        <div className="w-10 h-10 bg-primary-light/10 rounded-full flex items-center justify-center mb-2">
-          <i className="fas fa-plus text-primary"></i>
-        </div>
-        <span className="text-xs font-medium">Deposit</span>
-      </button>
+    <View style={styles.container}>
+      <TouchableOpacity 
+        onPress={() => handleAction("deposit", onDeposit)}
+        style={styles.actionButton}>
+        <View style={styles.iconContainer}>
+          <Text style={styles.iconText}>+</Text>
+        </View>
+        <Text style={styles.actionText}>Deposit</Text>
+      </TouchableOpacity>
       
-      <button 
-        onClick={() => handleAction("withdraw", onWithdraw)}
-        className="bg-white border border-neutral-200 rounded-lg p-3 flex flex-col items-center shadow-sm">
-        <div className="w-10 h-10 bg-secondary-light/10 rounded-full flex items-center justify-center mb-2">
-          <i className="fas fa-arrow-right text-secondary"></i>
-        </div>
-        <span className="text-xs font-medium">Withdraw</span>
-      </button>
+      <TouchableOpacity 
+        onPress={() => handleAction("withdraw", onWithdraw)}
+        style={styles.actionButton}>
+        <View style={styles.iconContainer}>
+          <Text style={styles.iconText}>→</Text>
+        </View>
+        <Text style={styles.actionText}>Withdraw</Text>
+      </TouchableOpacity>
       
-      <button 
-        onClick={() => handleAction("redeem", onRedeem)}
-        className="bg-white border border-neutral-200 rounded-lg p-3 flex flex-col items-center shadow-sm">
-        <div className="w-10 h-10 bg-accent-light/10 rounded-full flex items-center justify-center mb-2">
-          <i className="fas fa-rotate text-accent"></i>
-        </div>
-        <span className="text-xs font-medium">Redeem CD</span>
-      </button>
-    </div>
+      <TouchableOpacity 
+        onPress={() => handleAction("redeem", onRedeem)}
+        style={styles.actionButton}>
+        <View style={styles.iconContainer}>
+          <Text style={styles.iconText}>↻</Text>
+        </View>
+        <Text style={styles.actionText}>Redeem CD</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconText: {
+    fontSize: 16,
+    color: '#007AFF',
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});

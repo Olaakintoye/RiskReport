@@ -23,7 +23,7 @@ export async function initDatabase() {
       
       // If migration fails, try db:push as fallback
       log("Trying db:push as fallback...", "db-init");
-      const { exec } = require('child_process');
+      const { exec } = await import('child_process');
       
       exec('npm run db:push', (error: any, stdout: any, stderr: any) => {
         if (error) {

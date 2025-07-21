@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "CDInvestmentPro",
+    "slug": "CDInvestmentPro",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ola.CDInvestmentPro",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSPhotoLibraryUsageDescription": "Allow CDInvestmentPro to access your photos to upload videos.",
+        "NSCameraUsageDescription": "Allow CDInvestmentPro to access your camera to record videos."
+      }
+    },
+    "android": {
+      "backgroundColor": "#ffffff",
+      "package": "com.ola.CDInvestmentPro",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends."
+        }
+      ]
+    ],
+    "scheme": "cdinvestmentpro",
+    "newArchEnabled": true,
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+} 
