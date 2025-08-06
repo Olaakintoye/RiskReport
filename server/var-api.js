@@ -8,13 +8,24 @@ const { exec } = require('child_process');
 
 // Helper function to get Python executable path
 function getPythonExecutable() {
-  const pythonExecutable = path.join(__dirname, '..', 'venv', 'bin', 'python3');
+  const pythonExecutable = path.join(__dirname, '..', 'var_env', 'bin', 'python');
+  const oldVenvPython = path.join(__dirname, '..', 'venv', 'bin', 'python3');
   const fallbackPython = 'python3'; // Fallback to system python if venv not found
   
-  // Check if virtual environment Python exists
-  const pythonCmd = fs.existsSync(pythonExecutable) ? pythonExecutable : fallbackPython;
-  console.log('🐍 Using Python executable:', pythonCmd);
-  return pythonCmd;
+  // Check if new virtual environment Python exists first
+  if (fs.existsSync(pythonExecutable)) {
+    console.log('🐍 Using Python executable:', pythonExecutable);
+    return pythonExecutable;
+  }
+  
+  // Check if old virtual environment Python exists
+  if (fs.existsSync(oldVenvPython)) {
+    console.log('🐍 Using Python executable:', oldVenvPython);
+    return oldVenvPython;
+  }
+  
+  console.log('🐍 Using Python executable:', fallbackPython);
+  return fallbackPython;
 }
 
 const app = express();

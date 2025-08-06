@@ -594,11 +594,21 @@ app.post('/api/generate-var-chart-DISABLED', async (req, res) => {
 
 // Helper function to get the correct Python executable
 function getPythonExecutable() {
-  const pythonExecutable = path.join(__dirname, '..', 'venv', 'bin', 'python3');
+  const pythonExecutable = path.join(__dirname, '..', 'var_env', 'bin', 'python');
+  const oldVenvPython = path.join(__dirname, '..', 'venv', 'bin', 'python3');
   const fallbackPython = 'python3'; // Fallback to system python if venv not found
   
-  // Check if virtual environment Python exists
-  return fs.existsSync(pythonExecutable) ? pythonExecutable : fallbackPython;
+  // Check if new virtual environment Python exists first
+  if (fs.existsSync(pythonExecutable)) {
+    return pythonExecutable;
+  }
+  
+  // Check if old virtual environment Python exists
+  if (fs.existsSync(oldVenvPython)) {
+    return oldVenvPython;
+  }
+  
+  return fallbackPython;
 }
 
 // Function to generate initial charts

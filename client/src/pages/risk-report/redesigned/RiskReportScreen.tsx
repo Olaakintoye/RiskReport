@@ -16,18 +16,22 @@ import {
   Modal,
   TextInput
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { RootStackParamList } from '../../../navigation-types';
 import { LineChart } from 'react-native-chart-kit';
 import * as Haptics from 'expo-haptics';
 
 // Import services and types
 import portfolioService, { Portfolio, PortfolioSummary } from '../../../services/portfolioService';
-import riskService, { VaRParams, VaRResults, GreeksResults, RiskMetrics } from '../../../services/riskService';
+import riskService, { VaRParams, VaRResults, GreeksResults, RiskMetrics, getLastVaRAnalysis } from '../../../services/riskService';
 import intelligentStressTestService, { PortfolioComposition } from '../../../services/intelligentStressTestService';
 import * as notificationService from '../../../services/notificationService';
 import { AlertHistoryItem } from '../../../services/notificationService';
+
+// Define route type for navigation params
+type RiskReportScreenRouteProp = RouteProp<RootStackParamList, 'Var'>;
 
 // Import components
 import PortfolioSelector from './components/PortfolioSelector';
@@ -41,7 +45,7 @@ import ExportToolsCard from './components/ExportToolsCard';
 import RiskTracker from './components/RiskTracker';
 
 // Constants
-const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:3001';
 const DEFAULT_VAR_PARAMS: VaRParams = { 
   confidenceLevel: 0.95, 
   timeHorizon: 1, 
@@ -304,6 +308,10 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
 };
 
 const RiskReportScreen: React.FC = () => {
+  // Get route params for portfolio ID
+  const route = useRoute<RiskReportScreenRouteProp>();
+  const navigationPortfolioId = route.params?.portfolioId;
+
   // State
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
@@ -333,7 +341,35 @@ const RiskReportScreen: React.FC = () => {
   const [lookbackPeriod, setLookbackPeriod] = useState(DEFAULT_VAR_PARAMS.lookbackPeriod || 5);
   const [chartRefreshTrigger, setChartRefreshTrigger] = useState(0);
   const [portfolioComposition, setPortfolioComposition] = useState<PortfolioComposition | null>(null);
+  const [hasLoadedLastAnalysis, setHasLoadedLastAnalysis] = useState(false);
   
+  // Load last VaR analysis for a portfolio
+  const loadLastVaRAnalysis = async (portfolioId: string) => {
+    try {
+      console.log('Loading last VaR analysis for portfolio:', portfolioId);
+      const lastAnalysis = await getLastVaRAnalysis(portfolioId);
+      
+      if (lastAnalysis && lastAnalysis.hasAnalysis) {
+        console.log('Found previous VaR analysis, loading results');
+        setVarResults({
+          parametric: lastAnalysis.parametric,
+          historical: lastAnalysis.historical,
+          monteCarlo: lastAnalysis.monteCarlo
+        });
+        setHasLoadedLastAnalysis(true);
+        
+        // Force chart refresh to show the loaded data
+        setChartRefreshTrigger(Date.now());
+      } else {
+        console.log('No previous VaR analysis found for portfolio');
+        setHasLoadedLastAnalysis(false);
+      }
+    } catch (error) {
+      console.error('Error loading last VaR analysis:', error);
+      setHasLoadedLastAnalysis(false);
+    }
+  };
+
   // Load data function
   const loadData = async () => {
     try {
@@ -341,12 +377,44 @@ const RiskReportScreen: React.FC = () => {
       const portfolioSummaries = await portfolioService.getPortfolioSummaries();
       setPortfolios(portfolioSummaries);
       
-      if (portfolioSummaries.length > 0) {
-        setSelectedPortfolioSummary(portfolioSummaries[0]);
-        const portfolio = await portfolioService.getPortfolioById(portfolioSummaries[0].id);
+      // Prioritize navigation portfolio ID if provided
+      let targetPortfolioId = null;
+      let targetPortfolioSummary = null;
+      
+      if (navigationPortfolioId && portfolioSummaries.length > 0) {
+        // Find the portfolio matching the navigation parameter
+        targetPortfolioSummary = portfolioSummaries.find(p => p.id === navigationPortfolioId);
+        if (targetPortfolioSummary) {
+          targetPortfolioId = navigationPortfolioId;
+          console.log('Using portfolio from navigation:', targetPortfolioSummary.name);
+        }
+      }
+      
+      // Fall back to first portfolio if no navigation portfolio or not found
+      if (!targetPortfolioSummary && portfolioSummaries.length > 0) {
+        targetPortfolioSummary = portfolioSummaries[0];
+        targetPortfolioId = portfolioSummaries[0].id;
+        console.log('Using first available portfolio:', targetPortfolioSummary.name);
+      }
+      
+      if (targetPortfolioSummary && targetPortfolioId) {
+        setSelectedPortfolioSummary(targetPortfolioSummary);
+        const portfolio = await portfolioService.getPortfolioById(targetPortfolioId);
         if (portfolio) {
           setSelectedPortfolio(portfolio);
           await calculateRiskMetrics(portfolio);
+          
+          // Analyze portfolio composition for intelligent insights
+          try {
+            const composition = intelligentStressTestService.analyzePortfolioComposition(portfolio);
+            setPortfolioComposition(composition);
+          } catch (error) {
+            console.error('Error analyzing portfolio composition:', error);
+            setPortfolioComposition(null);
+          }
+          
+          // Load last VaR analysis for this portfolio
+          await loadLastVaRAnalysis(targetPortfolioId);
         }
       }
     } catch (error) {
@@ -461,6 +529,9 @@ const RiskReportScreen: React.FC = () => {
           console.error('Error analyzing portfolio composition:', error);
           setPortfolioComposition(null);
         }
+        
+        // Load last VaR analysis for the newly selected portfolio
+        await loadLastVaRAnalysis(portfolioId);
       }
     } catch (error) {
       console.error('Error changing portfolio:', error);
@@ -821,6 +892,8 @@ const RiskReportScreen: React.FC = () => {
           forceRefresh={chartRefreshTrigger}
           onRunAnalysis={() => setVarModalVisible(true)}
           runningPythonAnalysis={runningPythonAnalysis}
+          hasLoadedLastAnalysis={hasLoadedLastAnalysis}
+          selectedPortfolioName={selectedPortfolioSummary?.name}
         />
 
         {/* Portfolio Risk Analysis */}

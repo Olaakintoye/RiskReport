@@ -42,8 +42,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize the database
-  await initDatabase();
+  // Skip database initialization for now to focus on VaR analysis
+  console.log('Skipping database initialization...');
 
   const server = await registerRoutes(app);
 
@@ -66,7 +66,8 @@ app.use((req, res, next) => {
 
   // Use PORT from environment variable or fallback to 3001
   const port = process.env.PORT || 3001;
-  server.listen(port, () => {
-    log(`serving on port ${port}`);
+  const host = '0.0.0.0'; // Listen on all interfaces for mobile device access
+  server.listen(port, host, () => {
+    log(`serving on ${host}:${port}`);
   });
 })();

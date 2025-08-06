@@ -36,8 +36,8 @@ const DEFAULT_VAR_PARAMS: VaRParams = {
 };
 
 // Update with your actual server IP address and port for mobile/simulator access
-// Example: const API_URL = 'http://192.168.1.100:3000';
-const API_URL = 'http://localhost:3000'; // <-- Replace with your computer's local IP address
+// Example: const API_URL = 'http://192.168.1.100:3001';
+const API_URL = 'http://localhost:3001'; // <-- Replace with your computer's local IP address
 
 // Add VarAnalysisModal component inline for now
 const CONFIDENCE_LEVELS = [0.90, 0.95, 0.99];

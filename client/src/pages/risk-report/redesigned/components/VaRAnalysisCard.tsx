@@ -31,6 +31,8 @@ interface VaRAnalysisCardProps {
   forceRefresh?: number;
   onRunAnalysis?: () => void;
   runningPythonAnalysis?: boolean;
+  hasLoadedLastAnalysis?: boolean;
+  selectedPortfolioName?: string;
 }
 
 const { width } = Dimensions.get('window');
@@ -95,10 +97,12 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
   detailed = false,
   lastUpdated = new Date(),
   lookbackPeriod = 5,
-  apiUrl = 'http://localhost:3000',
+  apiUrl = 'http://localhost:3001',
   forceRefresh = 0,
   onRunAnalysis,
-  runningPythonAnalysis
+  runningPythonAnalysis,
+  hasLoadedLastAnalysis = false,
+  selectedPortfolioName = 'this portfolio'
 }) => {
   const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [zoomModalVisible, setZoomModalVisible] = useState(false);
@@ -771,27 +775,68 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
         </View>
       </View>
       
+      {/* Show "Run First Analysis" prompt if no previous analysis exists */}
+      {!hasLoadedLastAnalysis && !parametricVaR && !runningPythonAnalysis && (
+        <View style={styles.noAnalysisContainer}>
+          <View style={styles.noAnalysisIcon}>
+            <Ionicons name="analytics-outline" size={48} color="#94a3b8" />
+          </View>
+          <Text style={styles.noAnalysisTitle}>No Previous Analysis Found</Text>
+          <Text style={styles.noAnalysisMessage}>
+            Run your first VaR analysis for {selectedPortfolioName} to see risk metrics and charts.
+          </Text>
+          {onRunAnalysis && (
+            <TouchableOpacity 
+              style={styles.runFirstAnalysisButton} 
+              onPress={onRunAnalysis}
+            >
+              <Ionicons name="play-outline" size={18} color="#FFFFFF" style={styles.runFirstAnalysisIcon} />
+              <Text style={styles.runFirstAnalysisText}>Run First Analysis</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+      
       {/* Chart visualization - display actual PNG charts */}
-      <View style={styles.chartContainer}>
+      {(hasLoadedLastAnalysis || parametricVaR || runningPythonAnalysis) && (
+        <View style={styles.chartContainer}>
         <View style={styles.chartPlaceholder}>
-          {activeVarChart === 'parametric' && renderParametricImage}
+          {/* Show placeholder message for loaded analysis without charts */}
+          {hasLoadedLastAnalysis && !runningPythonAnalysis && (
+            <View style={styles.previousAnalysisPlaceholder}>
+              <Ionicons name="bar-chart-outline" size={48} color="#94a3b8" />
+              <Text style={styles.previousAnalysisTitle}>Previous Analysis Loaded</Text>
+              <Text style={styles.previousAnalysisMessage}>
+                Charts from your last analysis. Run a new analysis to generate fresh charts with current data.
+              </Text>
+            </View>
+          )}
           
-          {activeVarChart === 'historical' && renderHistoricalImage}
-          
-          {activeVarChart === 'montecarlo' && renderMonteCarloImage}
+          {/* Show actual charts when available */}
+          {!hasLoadedLastAnalysis && (
+            <>
+              {activeVarChart === 'parametric' && renderParametricImage}
+              {activeVarChart === 'historical' && renderHistoricalImage}
+              {activeVarChart === 'montecarlo' && renderMonteCarloImage}
+            </>
+          )}
         </View>
         
-        <View style={styles.chartFooter}>
-          <Text style={styles.chartLabel}>
-            {getChartDescription()}
-          </Text>
-          <Text style={styles.lastRefreshedText}>
-            Last updated: {formatRefreshTime(lastRefreshed[activeVarChart])}
-          </Text>
-        </View>
+        {/* Only show chart footer when we have actual charts, not placeholders */}
+        {!hasLoadedLastAnalysis && (
+          <View style={styles.chartFooter}>
+            <Text style={styles.chartLabel}>
+              {getChartDescription()}
+            </Text>
+            <Text style={styles.lastRefreshedText}>
+              Last updated: {formatRefreshTime(lastRefreshed[activeVarChart])}
+            </Text>
+          </View>
+        )}
       </View>
+      )}
 
-      {parametricVaR && (
+      {(hasLoadedLastAnalysis || parametricVaR) && parametricVaR && (
         <View style={styles.portfolioValueContainer}>
           <Text style={styles.portfolioValueLabel}>Portfolio Value:</Text>
           <Text style={styles.portfolioValueAmount}>
@@ -801,9 +846,10 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
       )}
       
       {/* Add divider between parameters and table */}
-      <View style={styles.sectionDivider} />
+      {(hasLoadedLastAnalysis || parametricVaR) && <View style={styles.sectionDivider} />}
       
-      <View style={styles.tableContainer}>
+      {(hasLoadedLastAnalysis || parametricVaR) && (
+        <View style={styles.tableContainer}>
         <View style={styles.tableHeader}>
           <Text style={[styles.tableCell, styles.methodCell, styles.headerCell]}>Method</Text>
           <Text style={[styles.tableCell, styles.valueCell, styles.headerCell]}>VaR</Text>
@@ -960,9 +1006,11 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
           )}
         </View>
       </View>
+      )}
       
       {/* Timestamp section */}
-      <View style={styles.timestampContainer}>
+      {(hasLoadedLastAnalysis || parametricVaR) && (
+        <View style={styles.timestampContainer}>
         <View style={styles.timestampLine} />
         <Text style={styles.timestampText}>
           <Ionicons name="time-outline" size={12} color="#64748b" style={{marginRight: 4}} />
@@ -970,6 +1018,7 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
         </Text>
         <View style={styles.timestampLine} />
       </View>
+      )}
       
       {detailed && (
         <View style={styles.detailedExplanation}>
@@ -1639,6 +1688,78 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 0,
+  },
+  // No Analysis prompt styles
+  noAnalysisContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    marginVertical: 16,
+  },
+  noAnalysisIcon: {
+    marginBottom: 16,
+  },
+  noAnalysisTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noAnalysisMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  runFirstAnalysisButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  runFirstAnalysisIcon: {
+    marginRight: 8,
+  },
+  runFirstAnalysisText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Previous analysis placeholder styles
+  previousAnalysisPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    margin: 16,
+  },
+  previousAnalysisTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    marginTop: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  previousAnalysisMessage: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 

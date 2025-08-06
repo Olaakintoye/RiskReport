@@ -1,5 +1,6 @@
 import express, { type Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import cors from "cors";
 import { storage } from "./storage";
 import { 
   insertUserSchema, 
@@ -15,8 +16,15 @@ import { fromZodError } from "zod-validation-error";
 import { addMonths } from "date-fns";
 import { setupAuth } from "./auth";
 import { log } from "./vite";
+const stressTestRouter = require("./api/stress-test-api");
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Enable CORS for all routes
+  app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081'],
+    credentials: true
+  }));
+  
   // Setup Authentication
   setupAuth(app);
   log("Authentication routes registered", "express");
@@ -24,6 +32,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API Routes
   const apiRouter = express.Router();
   app.use("/api", apiRouter);
+  
+  // Stress Test API Routes
+  app.use("/api/stress-test", stressTestRouter);
 
   // Handle Zod validation errors
   const validateRequest = (schema: any, body: any) => {
@@ -401,10 +412,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
       
       console.log(`Using ${lookbackPeriod} years of historical data for VaR calculation`);
-      console.log('Full Python command:', `python ${pythonScript} ${args.join(' ')}`);
+      
+      // Use Python from virtual environment
+      const pythonPath = path.join(__dirname, '..', 'var_env', 'bin', 'python');
+      console.log('Full Python command:', `${pythonPath} ${pythonScript} ${args.join(' ')}`);
       
       // Spawn Python process with 60 second timeout
-      const python = spawn('python', [pythonScript, ...args]);
+      const python = spawn(pythonPath, [pythonScript, ...args]);
       
       let dataString = '';
       let errorString = '';
@@ -413,10 +427,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timeout = setTimeout(() => {
         python.kill('SIGTERM');
         console.error('Python process timed out after 60 seconds');
-        res.status(408).json({ 
-          error: 'VaR analysis timed out', 
-          details: 'Python process exceeded 60 second limit' 
-        });
+        if (!res.headersSent) {
+          res.status(408).json({ 
+            error: 'VaR analysis timed out', 
+            details: 'Python process exceeded 60 second limit' 
+          });
+        }
       }, 60000);
       
              // Collect data from script
@@ -434,6 +450,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
        // Handle script completion
        python.on('close', (code: number) => {
         clearTimeout(timeout);
+        
+        // Check if response already sent
+        if (res.headersSent) {
+          return;
+        }
         
         if (code !== 0) {
           console.error(`Python script exited with code ${code}`);
@@ -499,22 +520,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
          }
       });
       
-             // Handle Python process errors
+                          // Handle Python process errors
        python.on('error', (error: any) => {
         clearTimeout(timeout);
         console.error('Python process error:', error);
-        res.status(500).json({ 
-          error: 'Failed to start Python process', 
-          details: error.message 
-        });
-      });
+        
+        // Check if response already sent
+        if (!res.headersSent) {
+          res.status(500).json({ 
+            error: 'Failed to start Python process', 
+            details: error.message
+          });
+        }
+       });
       
     } catch (error: any) {
       console.error('Error in VaR analysis endpoint:', error);
-      res.status(500).json({ 
-        error: 'Internal server error', 
-        details: error.message 
-      });
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'Internal server error', 
+          details: error.message 
+        });
+      }
     }
   });
 
