@@ -20,7 +20,8 @@ const USE_MOCK_DATA = false;
 
 // Update with your actual server IP address and port
 // Using localhost for development - change to your machine's IP for mobile access
-const API_URL = 'http://localhost:3000';
+import API_BASE from '../config/api';
+const API_URL = API_BASE;
 
 interface VarParams {
   confidenceLevel: string;

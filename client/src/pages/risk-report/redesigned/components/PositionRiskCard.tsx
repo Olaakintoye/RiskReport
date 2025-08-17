@@ -29,13 +29,17 @@ interface PositionRiskCardProps {
   onViewMore?: () => void;
   onDrillDown: (symbol: string) => void;
   detailed?: boolean;
+  overallVarPercentage?: number;
+  overallVarValue?: number;
 }
 
 const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
   portfolioId,
   onViewMore,
   onDrillDown,
-  detailed = false
+  detailed = false,
+  overallVarPercentage,
+  overallVarValue
 }) => {
   const [loading, setLoading] = useState(true);
   const [positionRiskData, setPositionRiskData] = useState<{
@@ -43,6 +47,7 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
     positions: PositionRiskData[];
   } | null>(null);
   const [chartView, setChartView] = useState('risk'); // 'risk' or 'allocation'
+  const [latestVar, setLatestVar] = useState<{ percentage?: number; method?: string } | null>(null);
   
   // Screen width for responsive chart
   const screenWidth = Dimensions.get('window').width - (detailed ? 32 : 64);
@@ -69,8 +74,30 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
           throw new Error(`Portfolio with ID ${portfolioId} not found`);
         }
 
-        // Get risk breakdown for the portfolio
-        const riskBreakdown = await getRiskBreakdown(portfolioId);
+        // Try to fetch the latest VaR analysis to influence risk attribution
+        let latestVarPct: number | undefined;
+        let latestMethod: string | undefined;
+        try {
+          const { getLastVaRAnalysis } = await import('../../../../services/riskService');
+          const last = await getLastVaRAnalysis(portfolioId);
+          if (last && last.hasAnalysis && last.parametric) {
+            // Prefer the active method's percentage if available
+            const paramPct = last.parametric.varPercentage;
+            latestVarPct = typeof paramPct === 'number' ? paramPct : Number(paramPct);
+            latestMethod = (last.parametric.parameters?.varMethod as string) || 'parametric';
+          }
+        } catch {}
+        setLatestVar(latestVarPct ? { percentage: latestVarPct, method: latestMethod } : null);
+
+        // Get risk breakdown using the exact same portfolio snapshot to keep
+        // Allocation tab in sync with Portfolio screen and feed risk calc
+        const effectiveVarPct = overallVarPercentage ?? latestVarPct;
+        const effectiveMethod = latestMethod;
+        const riskBreakdown = await getRiskBreakdown(
+          portfolioId,
+          effectiveVarPct ? { percentage: effectiveVarPct, method: effectiveMethod } : undefined,
+          portfolio
+        );
         
         // Calculate total portfolio value and position allocations
         const portfolioValue = portfolio.assets.reduce(
@@ -168,7 +195,7 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
   
   // Prepare chart data
   const chartData = positionRiskData.positions.map((position) => ({
-    name: position.symbol,
+    name: position.name,
     value: chartView === 'risk' ? position.riskContribution : position.allocation,
     color: position.color,
     legendFontColor: '#7F7F7F',
@@ -256,10 +283,19 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
               key={index}
               style={styles.legendItem}
               onPress={() => onDrillDown(position.symbol)}
+              activeOpacity={0.8}
             >
               <View style={[styles.colorIndicator, { backgroundColor: position.color }]} />
-              <View style={styles.legendItemContent}>
-                <Text style={styles.legendSymbol}>{position.symbol}</Text>
+              <View style={styles.legendTextContainer}>
+                <Text
+                  style={styles.legendName}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {position.name}
+                </Text>
+              </View>
+              <View style={styles.legendValueContainer}>
                 <Text style={styles.legendValue}>
                   {chartView === 'risk' ? position.riskContribution : position.allocation}%
                 </Text>
@@ -284,8 +320,8 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
       {detailed && (
         <View style={styles.detailedTable}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.symbolCell]}>Symbol</Text>
-            <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
+            <Text style={[styles.tableHeaderCell, styles.symbolCell]}>Name</Text>
+            <Text style={[styles.tableHeaderCell, styles.nameCell]}>Symbol</Text>
             <Text style={[styles.tableHeaderCell, styles.valueCell]}>Allocation</Text>
             <Text style={[styles.tableHeaderCell, styles.valueCell]}>Risk</Text>
           </View>
@@ -298,8 +334,8 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
                 style={styles.tableRow}
                 onPress={() => onDrillDown(item.symbol)}
               >
-                <Text style={[styles.tableCell, styles.symbolCell]}>{item.symbol}</Text>
-                <Text style={[styles.tableCell, styles.nameCell]} numberOfLines={1}>{item.name}</Text>
+                <Text style={[styles.tableCell, styles.symbolCell]} numberOfLines={1}>{item.name}</Text>
+                <Text style={[styles.tableCell, styles.nameCell]}>{item.symbol}</Text>
                 <Text style={[styles.tableCell, styles.valueCell]}>{item.allocation}%</Text>
                 <Text style={[styles.tableCell, styles.valueCell]}>{item.riskContribution}%</Text>
               </TouchableOpacity>
@@ -423,7 +459,8 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingVertical: 4,
   },
   colorIndicator: {
     width: 12,
@@ -431,19 +468,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: 8,
   },
-  legendItemContent: {
+  legendTextContainer: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingRight: 12,
   },
-  legendSymbol: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '500',
+  legendName: {
+    fontSize: 15,
+    color: '#0f172a',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  legendValueContainer: {
+    minWidth: 60,
+    alignItems: 'flex-end',
   },
   legendValue: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#64748b',
+    fontWeight: '600',
   },
   moreButton: {
     paddingVertical: 4,

@@ -6,3 +6,4 @@ export { default as BenchmarkCard } from './BenchmarkCard';
 export { default as PositionRiskCard } from './PositionRiskCard';
 export { default as MetricsCard } from './MetricsCard';
 export { default as ExportToolsCard } from './ExportToolsCard'; 
+export { default as BacktestCard } from './BacktestCard';

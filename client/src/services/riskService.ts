@@ -98,15 +98,9 @@ export interface DistributionAssumption {
   appropriateFor: string[];
 }
 
-// API URL for accessing chart images - with proper error handling
-const API_URL = (() => {
-  try {
-    return 'http://localhost:3001'; // Use localhost for development
-  } catch (error) {
-    console.warn('Error initializing API_URL, defaulting to localhost', error);
-    return 'http://localhost:3001'; // Use localhost for development
-  }
-})();
+// API URL for accessing chart images - centralized config
+import API_BASE from '../config/api';
+const API_URL = API_BASE;
 
 // Define placeholder chart images for when server is unavailable
 const PLACEHOLDER_CHART_IMAGES = {
@@ -527,7 +521,6 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
   // If real calculations are requested, try the Python backend
   if (useRealCalculations) {
     try {
-      const API_URL = 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/calculate-risk-metrics`, {
         method: 'POST',
         headers: {
@@ -613,12 +606,16 @@ export const calculatePortfolioRisk = async (portfolioId: string): Promise<{
 /**
  * Get risk breakdown by asset class or position
  */
-export const getRiskBreakdown = async (portfolioId: string): Promise<{
+export const getRiskBreakdown = async (
+  portfolioId: string,
+  latestVar?: { percentage?: number; method?: string },
+  portfolioOverride?: Portfolio
+): Promise<{
   assetClass: Record<string, number>;
   positions: Array<{symbol: string; name: string; contribution: number}>;
 }> => {
   try {
-    const portfolio = await portfolioService.getPortfolioById(portfolioId);
+    const portfolio = portfolioOverride || (await portfolioService.getPortfolioById(portfolioId));
     if (!portfolio) {
       throw new Error(`Portfolio with ID ${portfolioId} not found`);
     }
@@ -633,18 +630,34 @@ export const getRiskBreakdown = async (portfolioId: string): Promise<{
     const positionRisk: Array<{symbol: string; name: string; contribution: number}> = [];
     
     // Simple approximation of risk contribution (in a real app, would use more sophisticated methods)
+    // Optionally scale by the latest VaR percentage and method to make the breakdown responsive
+    const varPct = latestVar?.percentage ?? null; // e.g. 3.2 means 3.2%
+    const method = latestVar?.method || 'parametric';
+    // Dynamic multipliers by asset class that respond to higher VaR levels
+    const dynamicClassMultiplier = (assetClass: string): number => {
+      // Baseline multipliers per class
+      const base =
+        assetClass === 'equity' ? 1.2 :
+        assetClass === 'bond' ? 0.5 :
+        assetClass === 'cash' ? 0.1 :
+        assetClass === 'commodity' ? 1.5 :
+        assetClass === 'real_estate' ? 1.3 :
+        assetClass === 'alternative' ? 1.7 : 1.0;
+      if (varPct == null) return base;
+      // Scale heavier for riskier classes when portfolio VaR is elevated
+      const scale = 1 + Math.max(0, (varPct - 2.5)) / 10; // gentle boost above ~2.5%
+      const methodBoost = method === 'historical' ? 1.05 : method === 'monte-carlo' ? 1.1 : 1.0;
+      if (assetClass === 'equity' || assetClass === 'commodity' || assetClass === 'alternative') {
+        return base * scale * methodBoost;
+      }
+      return base * (0.8 + (scale - 1) * 0.5); // bonds/cash react less
+    };
     portfolio.assets.forEach(asset => {
       const assetValue = asset.price * asset.quantity;
       const weight = assetValue / portfolioValue;
       
       // Different risk factors for different asset classes
-      const riskFactor = 
-        asset.assetClass === 'equity' ? 1.2 :
-        asset.assetClass === 'bond' ? 0.5 :
-        asset.assetClass === 'cash' ? 0.1 :
-        asset.assetClass === 'commodity' ? 1.5 :
-        asset.assetClass === 'real_estate' ? 1.3 :
-        asset.assetClass === 'alternative' ? 1.7 : 1.0;
+      const riskFactor = dynamicClassMultiplier(asset.assetClass);
       
       // Calculate risk contribution
       const riskContribution = weight * riskFactor;
@@ -710,13 +723,26 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
   historical: VaRResults | null;
   monteCarlo: VaRResults | null;
   hasAnalysis: boolean;
-} | null> => {
+  } | null> => {
   try {
     // Import the risk tracking service to get latest metrics
     const { riskTrackingService } = await import('./riskTrackingService');
+    // Validate portfolioId format before querying DB to avoid 22P02 errors
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(portfolioId)) {
+      console.warn(`Invalid portfolio ID format: ${portfolioId}. Skipping latest risk metrics lookup.`);
+      return {
+        parametric: null,
+        historical: null,
+        monteCarlo: null,
+        hasAnalysis: false
+      };
+    }
+
     const latestMetrics = await riskTrackingService.getLatestRiskMetrics(portfolioId);
     
-    if (!latestMetrics || (!latestMetrics.var95 && !latestMetrics.lastUpdated)) {
+    // Require a non-null, positive VaR value to consider there is a usable last analysis
+    if (!latestMetrics || latestMetrics.var95 === null || latestMetrics.var95 === undefined || latestMetrics.var95 <= 0) {
       return {
         parametric: null,
         historical: null,

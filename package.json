@@ -12,9 +12,12 @@
     "db:push": "drizzle-kit push",
     "expo:start": "expo start",
     "ios": "npx expo run:ios",
+    "ios:fast": "npx expo run:ios",
+    "ios:clean": "npx expo run:ios --reset-cache",
     "android": "npx expo start --android",
     "web": "npx expo start --web",
-    "server": "node server/var-api.js"
+    "server": "node server/var-api.js",
+    "web-html": "cd web-html && TARGET_API=http://localhost:3001 node dev-server.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.23.9",

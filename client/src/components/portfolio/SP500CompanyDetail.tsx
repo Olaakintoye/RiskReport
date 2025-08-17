@@ -14,6 +14,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import sp500Service from '../../services/sp500Service';
 import tiingoService from '../../services/tiingoService';
 import marketDataService from '../../services/marketDataService';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 interface SP500CompanyDetailProps {
   symbol: string;
@@ -35,7 +36,7 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
   const [historicalPrices, setHistoricalPrices] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [realTimePrice, setRealTimePrice] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+
 
   useEffect(() => {
     const loadCompanyData = async () => {
@@ -86,11 +87,18 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
     loadCompanyData();
   }, [symbol]);
 
-  // Function to refresh real-time price
+  // Auto-refresh price data every 5 minutes
+  useAutoRefresh({
+    interval: 5 * 60 * 1000, // 5 minutes
+    enabled: !!company,
+    onRefresh: refreshPrice,
+    respectMarketHours: true
+  });
+
+  // Function to refresh real-time price (now for auto-refresh)
   const refreshPrice = async () => {
     if (!company) return;
     
-    setRefreshing(true);
     try {
       // Clear cache to ensure fresh data
       tiingoService.clearCache();
@@ -104,28 +112,11 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
         // Update total value
         updateTotalValue(price, parseFloat(quantity) || 0);
         
-        // Show confirmation
-        Alert.alert(
-          "Price Updated",
-          `Latest price for ${symbol}: $${price.toFixed(2)}`,
-          [{ text: "OK" }]
-        );
-      } else {
-        Alert.alert(
-          "Update Failed",
-          "Unable to get real-time price data. Using most recent available price.",
-          [{ text: "OK" }]
-        );
+        console.log(`Auto-refreshed price for ${symbol}: $${price.toFixed(2)}`);
       }
     } catch (error) {
-      console.error(`Error refreshing price for ${symbol}:`, error);
-      Alert.alert(
-        "Update Failed",
-        "Unable to refresh price data. Please try again later.",
-        [{ text: "OK" }]
-      );
-    } finally {
-      setRefreshing(false);
+      console.error(`Error auto-refreshing price for ${symbol}:`, error);
+      // Silent fail for auto-refresh to avoid interrupting user
     }
   };
 
@@ -222,21 +213,7 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
         <View style={styles.priceSection}>
           <Text style={styles.companyName}>{profile.companyName || quote.name}</Text>
           <View style={styles.priceContainer}>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>${displayPrice.toFixed(2)}</Text>
-              <TouchableOpacity 
-                style={styles.refreshButton}
-                onPress={refreshPrice}
-                disabled={refreshing}
-              >
-                <Ionicons 
-                  name={refreshing ? "sync-circle" : "sync"} 
-                  size={20} 
-                  color="#3b82f6" 
-                  style={refreshing ? styles.rotating : undefined}
-                />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.price}>${displayPrice.toFixed(2)}</Text>
             <Text style={styles.priceSource}>{priceSource} price</Text>
             <Text style={[
               styles.priceChange,
@@ -512,10 +489,7 @@ const styles = StyleSheet.create({
   priceContainer: {
     marginTop: 8,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+
   price: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -527,13 +501,8 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 2,
   },
-  refreshButton: {
-    marginLeft: 12,
-    padding: 4,
-  },
-  rotating: {
-    opacity: 0.7,
-  },
+
+
   priceChange: {
     fontSize: 16,
     fontWeight: '500',

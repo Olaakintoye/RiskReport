@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Icon Preview</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .preview-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .icon-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        }
+        
+        .icon-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .size-variants {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .size-variant {
+            text-align: center;
+        }
+        
+        .size-variant .icon {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        }
+        
+        .size-48 { width: 48px; height: 48px; }
+        .size-72 { width: 72px; height: 72px; }
+        .size-96 { width: 96px; height: 96px; }
+        .size-144 { width: 144px; height: 144px; }
+        .size-192 { width: 192px; height: 192px; }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .description {
+            color: #666;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+        
+        .instructions {
+            background: #e8f4fd;
+            border: 1px solid #b3d9f2;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            max-width: 800px;
+        }
+        
+        .instructions h3 {
+            color: #2c5aa0;
+            margin-top: 0;
+        }
+        
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>App Icon Preview</h1>
+    
+    <div class="preview-container">
+        <div class="icon-preview">
+            <img src="app-icon.svg" alt="App Icon">
+        </div>
+        <p class="description">
+            <strong>Shield with Sigma Symbol</strong><br>
+            A clean, modern app icon featuring a white shield with a black Sigma (Σ) cutout, 
+            set against a black background with subtle 3D effects and shadows.
+        </p>
+    </div>
+    
+    <div class="size-variants">
+        <div class="size-variant">
+            <div class="icon size-48">
+                <img src="app-icon.svg" alt="48x48">
+            </div>
+            <div>48x48</div>
+        </div>
+        <div class="size-variant">
+            <div class="icon size-72">
+                <img src="app-icon.svg" alt="72x72">
+            </div>
+            <div>72x72</div>
+        </div>
+        <div class="size-variant">
+            <div class="icon size-96">
+                <img src="app-icon.svg" alt="96x96">
+            </div>
+            <div>96x96</div>
+        </div>
+        <div class="size-variant">
+            <div class="icon size-144">
+                <img src="app-icon.svg" alt="144x144">
+            </div>
+            <div>144x144</div>
+        </div>
+        <div class="size-variant">
+            <div class="icon size-192">
+                <img src="app-icon.svg" alt="192x192">
+            </div>
+            <div>192x192</div>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h3>Next Steps to Implement the App Icon:</h3>
+        <ul>
+            <li><strong>Convert SVG to PNG:</strong> Use the SVG file to generate PNG files at the required sizes</li>
+            <li><strong>iOS:</strong> Replace the existing icon in <code>ios/CDInvestmentPro/Images.xcassets/AppIcon.appiconset/</code></li>
+            <li><strong>Android:</strong> Replace icons in <code>android/app/src/main/res/mipmap-*/</code> directories</li>
+            <li><strong>Test:</strong> Build and run the app to see the new icon in the iOS simulator and Android emulator</li>
+        </ul>
+        
+        <h3>Tools you can use to convert SVG to PNG:</h3>
+        <ul>
+            <li>Online converters (search "SVG to PNG converter")</li>
+            <li>Design tools like Figma, Sketch, or Adobe Illustrator</li>
+            <li>Command line tools like ImageMagick or Inkscape</li>
+            <li>Browser: Open the SVG in a browser and take screenshots at different sizes</li>
+        </ul>
+    </div>
+</body>
+</html> 

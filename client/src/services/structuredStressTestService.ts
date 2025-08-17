@@ -7,6 +7,7 @@
  */
 
 import displayNameService from './displayNameService';
+import { STRESS_BASE } from '../config/api';
 
 // ==========================================
 // TYPE DEFINITIONS
@@ -166,7 +167,7 @@ export class StructuredStressTestService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = 'http://localhost:3000/api/stress-test';
+    this.baseUrl = `${STRESS_BASE}/api/stress-test`;
   }
 
   // ==========================================

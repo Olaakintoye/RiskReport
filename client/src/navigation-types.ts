@@ -14,7 +14,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string };
   FollowersList: { userId: string };
   FollowingList: { userId: string };
-  Var: undefined;
+  Var: { portfolioId?: string } | undefined;
 };
 
 export type ScreenProps<T extends keyof RootStackParamList> = 

@@ -1,5 +1,16 @@
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import {
+  endOfMonth,
+  endOfWeek,
+  endOfYear,
+  format,
+  isAfter,
+  parseISO,
+  subWeeks,
+  subMonths,
+  subYears,
+} from 'date-fns';
 
 type RiskMetric = Database['public']['Tables']['risk_metrics']['Row'];
 type PortfolioPerformance = Database['public']['Tables']['portfolio_performance']['Row'];
@@ -136,7 +147,7 @@ class RiskTrackingService {
       
       let data: TimeSeriesDataPoint[] = [];
       let color = '#007AFF';
-      let label = metricType;
+      let label: string = metricType;
 
       if (metricType === 'var') {
         // Get VaR data with 95% confidence level
@@ -162,21 +173,24 @@ class RiskTrackingService {
         return this.getMockTimeSeriesData(metricType, timeFrame);
       }
 
+      // Aggregate to proper period ends based on timeframe
+      const aggregated = this.aggregateToPeriodEnds(data, timeFrame);
+
       // Format for chart
-      const labels = data.map(point => this.formatDateLabel(point.date, timeFrame));
-      const values = data.map(point => metricType === 'var' || metricType === 'volatility' 
-        ? point.value * 100 // Convert to percentage
+      const labels = aggregated.map(point => this.formatDateLabel(point.date, timeFrame));
+      const values = aggregated.map(point => (metricType === 'var' || metricType === 'volatility')
+        ? point.value * 100
         : point.value
       );
 
-             return {
-         labels,
-         datasets: [{
-           label: label,
-           data: values,
-           color: () => color
-         }]
-       };
+      return {
+        labels,
+        datasets: [{
+          label: label,
+          data: values,
+          color: () => color
+        }]
+      };
 
     } catch (error) {
       console.error('Error getting time series data:', error);
@@ -298,22 +312,75 @@ class RiskTrackingService {
     }
   }
 
+  /**
+   * Aggregate raw daily observations into end-of-period points so that
+   * the chart displays one point per period within the selected timeframe.
+   * - 1m: end of week (Mon-Sun weeks)
+   * - 3m/6m/1y: end of month
+   * - all: end of year
+   */
+  private aggregateToPeriodEnds(
+    data: TimeSeriesDataPoint[],
+    timeFrame: '1m' | '3m' | '6m' | '1y' | 'all'
+  ): TimeSeriesDataPoint[] {
+    if (!data || data.length === 0) return [];
+
+    // Data should be ascending by date already; safeguard
+    const sorted = [...data].sort((a, b) => (
+      parseISO(a.date).getTime() - parseISO(b.date).getTime()
+    ));
+
+    const useWeek = timeFrame === '1m';
+    const useYear = timeFrame === 'all';
+
+    const bucketMap = new Map<string, TimeSeriesDataPoint>();
+
+    for (const point of sorted) {
+      const d = parseISO(point.date);
+      const endDate = useWeek
+        ? endOfWeek(d, { weekStartsOn: 1 })
+        : useYear
+          ? endOfYear(d)
+          : endOfMonth(d);
+      const key = format(endDate, 'yyyy-MM-dd');
+      // Always keep the last value in the period (since sorted asc, overwrite)
+      bucketMap.set(key, { date: key, value: point.value });
+    }
+
+    // Convert map back to ordered array
+    const aggregated = Array.from(bucketMap.values()).sort((a, b) => (
+      parseISO(a.date).getTime() - parseISO(b.date).getTime()
+    ));
+
+    // Restrict to the number of periods relevant to timeframe
+    const maxPoints = (() => {
+      switch (timeFrame) {
+        case '1m': return 5; // up to 5 weeks in a month
+        case '3m': return 3;
+        case '6m': return 6;
+        case '1y': return 12;
+        case 'all': return aggregated.length; // keep all years available
+      }
+    })();
+
+    // Keep last N periods only
+    return aggregated.slice(Math.max(0, aggregated.length - maxPoints));
+  }
+
   private formatDateLabel(date: string, timeFrame: string): string {
     const d = new Date(date);
     
     switch (timeFrame) {
       case '1m':
-        return d.getDate().toString();
+        return format(d, 'MMM d'); // weekly points
       case '3m':
-        return `${d.getMonth() + 1}/${d.getDate()}`;
       case '6m':
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       case '1y':
-        return d.toLocaleDateString('en-US', { month: 'short' });
+        return format(d, 'MMM'); // month end
       case 'all':
-        return d.getFullYear().toString();
+        return format(d, 'yyyy');
       default:
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return format(d, 'MMM d');
     }
   }
 
@@ -344,29 +411,67 @@ class RiskTrackingService {
   }
 
   private getMockTimeSeriesData(metricType: string, timeFrame: string): RiskTrackingData {
-    // Fallback mock data when no historical data is available
-    const getLabels = () => {
+    // Fallback mock data when no historical data is available.
+    // Generate period-end dates and plausible values aligned to timeframe.
+    const now = new Date();
+
+    const { dates, labelFormatter } = (() => {
       switch (timeFrame) {
-        case '1m': return ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-        case '3m': return ['Month 1', 'Month 2', 'Month 3'];
-        case '6m': return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-        case '1y': return ['Q1', 'Q2', 'Q3', 'Q4'];
-        case 'all': return ['2022', '2023', '2024'];
-        default: return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+        case '1m': {
+          const count = 5; // up to 5 weekly points
+          const arr: Date[] = [];
+          for (let i = count - 1; i >= 0; i -= 1) {
+            arr.push(endOfWeek(subWeeks(now, i), { weekStartsOn: 1 }));
+          }
+          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM d') };
+        }
+        case '3m':
+        case '6m':
+        case '1y': {
+          const count = timeFrame === '3m' ? 3 : timeFrame === '6m' ? 6 : 12;
+          const arr: Date[] = [];
+          for (let i = count - 1; i >= 0; i -= 1) {
+            arr.push(endOfMonth(subMonths(now, i)));
+          }
+          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM') };
+        }
+        case 'all': {
+          const count = 3; // last 3 years
+          const arr: Date[] = [];
+          for (let i = count - 1; i >= 0; i -= 1) {
+            arr.push(endOfYear(subYears(now, i)));
+          }
+          return { dates: arr, labelFormatter: (d: Date) => format(d, 'yyyy') };
+        }
+        default: {
+          const arr = [endOfMonth(now)];
+          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM d') };
+        }
       }
-    };
+    })();
 
-    const getData = () => {
+    // Seed starting values by metric type (already in chart units)
+    let current = (() => {
       switch (metricType) {
-        case 'var': return [3.2, 3.5, 3.1, 3.7, 3.3, 1.8];
-        case 'volatility': return [18.4, 17.9, 18.8, 19.2, 18.7, 16.2];
-        case 'sharpe_ratio': return [0.95, 1.02, 0.98, 1.05, 1.12, 1.28];
-        case 'beta': return [0.92, 0.89, 0.91, 0.94, 0.88, 0.82];
-        default: return [1, 2, 3, 4, 5, 6];
+        case 'var': return 2.8; // %
+        case 'volatility': return 18; // %
+        case 'sharpe_ratio': return 1.0;
+        case 'beta': return 0.95;
+        default: return 1;
       }
-    };
+    })();
 
-    const getColor = () => {
+    const values: number[] = dates.map((_d, idx) => {
+      // small drift and noise
+      const drift = metricType === 'sharpe_ratio' ? 0.02 : metricType === 'beta' ? -0.005 : -0.1;
+      const noise = (Math.random() - 0.5) * (metricType === 'sharpe_ratio' || metricType === 'beta' ? 0.08 : 0.6);
+      current = Math.max(0, current + (idx === 0 ? 0 : drift) + noise);
+      return parseFloat(current.toFixed(metricType === 'sharpe_ratio' || metricType === 'beta' ? 2 : 1));
+    });
+
+    const labels = dates.map(d => labelFormatter(d));
+
+    const color = (() => {
       switch (metricType) {
         case 'var': return '#FF3B30';
         case 'volatility': return '#FF9500';
@@ -374,15 +479,15 @@ class RiskTrackingService {
         case 'beta': return '#007AFF';
         default: return '#007AFF';
       }
-    };
+    })();
 
     return {
-      labels: getLabels(),
+      labels,
       datasets: [{
         label: metricType,
-        data: getData(),
-        color: () => getColor()
-      }]
+        data: values,
+        color: () => color,
+      }],
     };
   }
 }

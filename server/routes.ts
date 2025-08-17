@@ -20,10 +20,8 @@ const stressTestRouter = require("./api/stress-test-api");
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Enable CORS for all routes
-  app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:19006', 'http://localhost:8081'],
-    credentials: true
-  }));
+  // Allow all origins during development for mobile/web
+  app.use(cors());
   
   // Setup Authentication
   setupAuth(app);
@@ -545,6 +543,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Portfolio Backtesting endpoint
+  apiRouter.post("/backtest-portfolio", async (req: Request, res: Response) => {
+    try {
+      const { spawn } = require('child_process');
+      const path = require('path');
+      const fs = require('fs');
+
+      const { portfolio, startDate, endDate, rebalancing, benchmarkSymbols, riskFreeRate } = req.body || {};
+
+      if (!portfolio || !portfolio.assets || portfolio.assets.length === 0) {
+        return res.status(400).json({ error: 'Invalid portfolio data' });
+      }
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'startDate and endDate are required (YYYY-MM-DD)' });
+      }
+
+      const inputPayload = {
+        portfolio: {
+          name: portfolio.name || 'Portfolio',
+          assets: portfolio.assets.map((a: any) => ({
+            symbol: a.symbol,
+            quantity: a.quantity,
+            price: a.price
+          }))
+        },
+        startDate,
+        endDate,
+        rebalancing: rebalancing || 'none',
+        benchmarkSymbols: Array.isArray(benchmarkSymbols) ? benchmarkSymbols : [],
+        riskFreeRate: typeof riskFreeRate === 'number' ? riskFreeRate : 0.02
+      };
+
+      // temp files
+      const timestamp = Date.now();
+      const inputFile = path.join(__dirname, 'temp', `backtest_input_${timestamp}.json`);
+      const outputFile = path.join(__dirname, 'temp', `backtest_output_${timestamp}.json`);
+
+      // ensure temp dir
+      const tempDir = path.join(__dirname, 'temp');
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+      fs.writeFileSync(inputFile, JSON.stringify(inputPayload, null, 2));
+
+      const pythonScript = path.join(__dirname, 'backtest_portfolio.py');
+      const pythonPath = path.join(__dirname, '..', 'var_env', 'bin', 'python');
+
+      const python = spawn(pythonPath, [pythonScript, '--input', inputFile, '--output', outputFile]);
+
+      let stderr = '';
+      python.stderr.on('data', (d: any) => { stderr += d.toString(); });
+
+      const timeout = setTimeout(() => {
+        python.kill('SIGTERM');
+      }, 60000);
+
+      python.on('close', (code: number) => {
+        clearTimeout(timeout);
+        try {
+          if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
+        } catch {}
+
+        if (code !== 0) {
+          return res.status(500).json({ error: 'Backtest failed', details: stderr });
+        }
+
+        if (!fs.existsSync(outputFile)) {
+          return res.status(500).json({ error: 'Backtest produced no output' });
+        }
+
+        try {
+          const json = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+          fs.unlinkSync(outputFile);
+          return res.json({ success: true, results: json });
+        } catch (e: any) {
+          return res.status(500).json({ error: 'Failed to read backtest output', details: e.message });
+        }
+      });
+
+      python.on('error', (err: any) => {
+        try { if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile); } catch {}
+        return res.status(500).json({ error: 'Failed to start Python process', details: err.message });
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Internal error', details: err.message });
+    }
+  });
+
   // Static file serving for VaR charts
   apiRouter.get("/charts", (req: Request, res: Response) => {
     const fs = require('fs');
@@ -567,8 +652,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')
       );
       
-      // Return the list of image files with full URLs
-      const imageUrls = imageFiles.map(file => `http://localhost:3001/${file}`);
+      // Return the list of image files with full URLs, using request host
+      const protocol = (req.headers['x-forwarded-proto'] as string) || 'http';
+      const host = req.headers.host || `localhost:3001`;
+      const imageUrls = imageFiles.map(file => `${protocol}://${host}/${file}`);
       
       res.json({
         success: true,

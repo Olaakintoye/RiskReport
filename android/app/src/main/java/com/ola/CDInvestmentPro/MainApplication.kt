@@ -1,4 +1,4 @@
-package com.cdinvestmentpro
+package com.ola.CDInvestmentPro
 
 import android.app.Application
 import android.content.res.Configuration

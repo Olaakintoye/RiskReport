@@ -256,14 +256,48 @@ class LegacyScenarioService {
   }
 
   /**
-   * Run scenario with fresh data (alias for runScenario)
+   * Run scenario with fresh data - ensures latest portfolio data is used
    */
   async runScenarioWithFreshData(scenarioId: string, portfolioId: string): Promise<LegacyScenarioRun> {
     console.log('🔄 RUNNING SCENARIO WITH FRESH PORTFOLIO DATA');
     console.log('Scenario ID:', scenarioId);
     console.log('Portfolio ID:', portfolioId);
     
+    // Force refresh of portfolio data before running scenario
+    await this.refreshPortfolioData(portfolioId);
+    
     return this.runScenario(scenarioId, portfolioId);
+  }
+
+  /**
+   * Force refresh portfolio data to ensure fresh data for analysis
+   */
+  private async refreshPortfolioData(portfolioId: string): Promise<void> {
+    try {
+      console.log('🔄 Refreshing portfolio data for ID:', portfolioId);
+      
+      // Get fresh portfolio data from storage
+      const portfolioService = await import('./portfolioService');
+      const portfolio = await portfolioService.default.getPortfolioById(portfolioId);
+      
+      if (!portfolio) {
+        throw new Error(`Portfolio not found: ${portfolioId}`);
+      }
+      
+      console.log('✅ Portfolio data refreshed successfully');
+      console.log('Portfolio name:', portfolio.name);
+      console.log('Asset count:', portfolio.assets.length);
+      console.log('Total value:', portfolio.assets.reduce((sum, asset) => sum + asset.price * asset.quantity, 0));
+      
+      // Log asset details for debugging
+      portfolio.assets.forEach(asset => {
+        console.log(`  ${asset.symbol}: ${asset.quantity} @ $${asset.price} = $${(asset.quantity * asset.price).toFixed(2)}`);
+      });
+      
+    } catch (error) {
+      console.error('❌ Error refreshing portfolio data:', error);
+      throw error;
+    }
   }
 
   /**

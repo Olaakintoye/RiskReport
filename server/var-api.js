@@ -5,6 +5,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const tiingo = require('./market_data_tiingo');
 
 // Helper function to get Python executable path
 function getPythonExecutable() {
@@ -34,6 +35,15 @@ const PORT = 3001;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+
+// Simple status endpoint for health checks
+app.get('/api/status', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    message: 'VaR Analysis API is running'
+  });
+});
 
 // Set proper MIME types
 const mimeTypes = {
@@ -124,7 +134,9 @@ app.post('/api/run-var', async (req, res) => {
       distribution = 'normal', // default to normal distribution
       contractSize = 50,
       numContracts = 10,
-      stressPeriod
+      stressPeriod,
+      attributionOnly,
+      skipChart
     } = params;
     
     // Calculate portfolio value directly from assets if provided
@@ -222,6 +234,9 @@ app.post('/api/run-var', async (req, res) => {
       '--method', varMethod,
       '--lookback', lookbackPeriod // Always include lookback period
     ];
+    if (attributionOnly || skipChart) {
+      args.push('--skip-chart');
+    }
     
     // Add portfolio data path if available
     if (portfolioDataPath) {
@@ -318,13 +333,13 @@ app.post('/api/run-var', async (req, res) => {
         
         // Parse JSON results
         let results = {};
-        if (fs.existsSync(jsonOutputFilename)) {
-          const jsonData = fs.readFileSync(jsonOutputFilename, 'utf8');
+        if (fs.existsSync(jsonOutputFilePath)) {
+          const jsonData = fs.readFileSync(jsonOutputFilePath, 'utf8');
           results = JSON.parse(jsonData);
           
           // Copy JSON to images directory with timestamp
           fs.copyFileSync(
-            jsonOutputFilename,
+            jsonOutputFilePath,
             path.join(imagesDir, jsonOutputFilename)
           );
           
@@ -336,12 +351,12 @@ app.post('/api/run-var', async (req, res) => {
               : 'monte_carlo_var.json';
               
           fs.copyFileSync(
-            jsonOutputFilename,
+            jsonOutputFilePath,
             path.join(imagesDir, standardJsonFilename)
           );
           
           // Clean up original file
-          fs.unlinkSync(jsonOutputFilename);
+          fs.unlinkSync(jsonOutputFilePath);
         } else {
           // Extract results from output if JSON not available
           console.log('JSON file not found, parsing from console output');
@@ -988,6 +1003,99 @@ app.post('/api/calculate-risk-metrics', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// Portfolio Backtesting endpoint
+app.post('/api/backtest-portfolio', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { spawn } = require('child_process');
+
+    const { portfolio, startDate, endDate, rebalancing, benchmarkSymbols, riskFreeRate } = req.body || {};
+
+    if (!portfolio || !portfolio.assets || portfolio.assets.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid portfolio data' });
+    }
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, error: 'startDate and endDate are required (YYYY-MM-DD)' });
+    }
+
+    // If TIINGO_API_KEY is present, prefetch daily prices to ensure model gets robust data
+    let priceMap = null;
+    try {
+      if (process.env.TIINGO_API_KEY) {
+        const syms = portfolio.assets.map(a => a.symbol);
+        priceMap = await tiingo.fetchMultiple(syms, startDate, endDate);
+      }
+    } catch (e) {
+      // Non-fatal; fall back to yfinance in Python
+      priceMap = null;
+    }
+
+    const inputPayload = {
+      portfolio: {
+        name: portfolio.name || 'Portfolio',
+        assets: portfolio.assets.map(a => ({ symbol: a.symbol, quantity: a.quantity, price: a.price }))
+      },
+      startDate,
+      endDate,
+      rebalancing: rebalancing || 'none',
+      benchmarkSymbols: Array.isArray(benchmarkSymbols) ? benchmarkSymbols : [],
+      riskFreeRate: typeof riskFreeRate === 'number' ? riskFreeRate : 0.02
+    };
+
+    if (priceMap) {
+      inputPayload.priceMap = priceMap;
+    }
+
+    // Ensure temp directory exists
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    const ts = Date.now();
+    const inputFile = path.join(tempDir, `backtest_input_${ts}.json`);
+    const outputFile = path.join(tempDir, `backtest_output_${ts}.json`);
+    fs.writeFileSync(inputFile, JSON.stringify(inputPayload, null, 2));
+
+    const python = spawn(getPythonExecutable(), [
+      path.join(__dirname, 'backtest_portfolio.py'),
+      '--input', inputFile,
+      '--output', outputFile
+    ]);
+
+    let stderr = '';
+    python.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    const timeout = setTimeout(() => {
+      try { python.kill('SIGTERM'); } catch {}
+    }, 60000);
+
+    python.on('close', (code) => {
+      clearTimeout(timeout);
+      try { if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile); } catch {}
+      if (code !== 0) {
+        return res.status(500).json({ success: false, error: 'Backtest failed', details: stderr });
+      }
+      if (!fs.existsSync(outputFile)) {
+        return res.status(500).json({ success: false, error: 'Backtest produced no output' });
+      }
+      try {
+        const json = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+        fs.unlinkSync(outputFile);
+        return res.json({ success: true, results: json });
+      } catch (e) {
+        return res.status(500).json({ success: false, error: 'Failed to parse backtest output', details: e.message });
+      }
+    });
+
+    python.on('error', (err) => {
+      try { if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile); } catch {}
+      return res.status(500).json({ success: false, error: 'Failed to start Python process', details: err.message });
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Internal error', details: err.message });
   }
 });
 

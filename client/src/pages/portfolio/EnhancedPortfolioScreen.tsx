@@ -9,11 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  RefreshControl,
+
   Animated,
   Dimensions,
   Platform
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -27,6 +29,9 @@ import { usePersistentState } from '../../hooks/use-screen-state';
 
 // Import the SP500PortfolioWizard
 import SP500PortfolioWizard from './SP500PortfolioWizard';
+
+// Import auto-refresh hook
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 // Import the EditPortfolioModal
 import EditPortfolioModal from '../../components/portfolio/EditPortfolioModal';
@@ -65,7 +70,7 @@ const EnhancedPortfolioScreen: React.FC = () => {
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [filteredPortfolios, setFilteredPortfolios] = useState<PortfolioSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
   const [searchQuery, setSearchQuery] = usePersistentState<string>('EnhancedPortfolioScreen', 'searchQuery', '');
   const [showSP500Wizard, setShowSP500Wizard] = useState(false);
   const [viewMode, setViewMode] = usePersistentState<ViewMode>('EnhancedPortfolioScreen', 'viewMode', {
@@ -117,7 +122,6 @@ const EnhancedPortfolioScreen: React.FC = () => {
       );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -132,27 +136,28 @@ const EnhancedPortfolioScreen: React.FC = () => {
     }, [])
   );
 
-  // Refresh function
+  // Auto-refresh function for portfolios
   const refreshPortfolios = async () => {
-    setRefreshing(true);
     try {
       await portfolioService.getAllPortfolios();
       const portfolioSummaries = await portfolioService.getPortfolioSummaries();
       setPortfolios(portfolioSummaries);
       setFilteredPortfolios(portfolioSummaries);
       
-      console.log('Refreshed portfolios with real-time prices');
+      console.log('Auto-refreshed portfolios with real-time prices');
     } catch (error) {
-      console.error('Error refreshing portfolios:', error);
-      Alert.alert(
-        'Error',
-        'Failed to refresh portfolios with real-time data. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setRefreshing(false);
+      console.error('Error auto-refreshing portfolios:', error);
+      // Silent fail for auto-refresh to avoid interrupting user
     }
   };
+
+  // Auto-refresh portfolios every 10 minutes
+  useAutoRefresh({
+    interval: 10 * 60 * 1000, // 10 minutes
+    enabled: !loading,
+    onRefresh: refreshPortfolios,
+    respectMarketHours: true
+  });
 
   // Handle portfolio selection
   const handlePortfolioPress = async (portfolio: PortfolioSummary) => {
@@ -203,6 +208,22 @@ const EnhancedPortfolioScreen: React.FC = () => {
   // Handle creating a new portfolio
   const handleCreatePortfolio = () => {
     setShowSP500Wizard(true);
+  };
+
+  // Import CSV -> create portfolio
+  const handleImportCSV = async () => {
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: 'text/csv', multiple: false });
+      if ((pick as any).canceled || !(pick as any).assets?.[0]) return;
+      const fileUri = (pick as any).assets[0].uri as string;
+      const content = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+      const imported = await portfolioService.importPortfolioFromCSV(content, `Imported ${new Date().toLocaleString()}`);
+      Alert.alert('Imported', `Created portfolio \"${imported.name}\" with ${imported.assets.length} assets.`);
+      loadPortfolios();
+    } catch (e: any) {
+      console.error('CSV import failed', e);
+      Alert.alert('Import Failed', e?.message || 'Could not import CSV. Ensure headers are: symbol,quantity[,price]');
+    }
   };
 
   // Handle closing the SP500 wizard
@@ -298,7 +319,7 @@ const EnhancedPortfolioScreen: React.FC = () => {
   }
 
   // Render loading state
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -326,17 +347,12 @@ const EnhancedPortfolioScreen: React.FC = () => {
         </View>
         
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={refreshPortfolios}
-            disabled={refreshing}
+          <TouchableOpacity 
+            style={styles.importButton}
+            onPress={handleImportCSV}
           >
-            <Ionicons 
-              name={refreshing ? "sync-circle" : "sync"} 
-              size={24} 
-              color="#3b82f6" 
-              style={refreshing ? styles.rotating : undefined}
-            />
+            <Ionicons name="document-text" size={20} color="#2563eb" />
+            <Text style={styles.importButtonText}>Import CSV</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -351,14 +367,7 @@ const EnhancedPortfolioScreen: React.FC = () => {
 
       <ScrollView 
         style={styles.scrollContainer}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={refreshPortfolios}
-            colors={['#10b981']}
-            tintColor="#10b981"
-          />
-        }
+
         showsVerticalScrollIndicator={false}
       >
         {/* Portfolio Summary Stats */}
@@ -602,13 +611,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  refreshButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  rotating: {
-    opacity: 0.7,
-  },
+
+
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -616,6 +620,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+    gap: 6
+  },
+  importButtonText: {
+    color: '#2563eb',
+    fontWeight: '600'
   },
   createButtonText: {
     color: '#fff',

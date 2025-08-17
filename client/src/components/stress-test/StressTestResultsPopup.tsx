@@ -23,10 +23,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 interface AssetBreakdownCardProps {
   asset: any;
   rank: number;
+  portfolioValue?: number;
 }
 
-const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) => {
+const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank, portfolioValue }) => {
   const [expanded, setExpanded] = useState(false);
+  
+  // Early return if asset is undefined or invalid
+  if (!asset || typeof asset !== 'object') {
+    return (
+      <View style={styles.assetBreakdownCard}>
+        <Text style={styles.errorText}>Invalid asset data</Text>
+      </View>
+    );
+  }
   
   const getAssetTypeColor = (assetType: string | undefined): string => {
     const colors: Record<string, string> = {
@@ -41,6 +51,15 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
     if (!assetType) return '#64748b';
     return colors[assetType.toLowerCase()] || '#64748b';
   };
+
+  // Safe derivations for display
+  const displayTypeRaw = (asset?.assetType || asset?.assetClass || 'N/A');
+  const displayType = typeof displayTypeRaw === 'string' ? displayTypeRaw : 'N/A';
+  const computedWeight = typeof asset?.weight === 'number'
+    ? asset.weight
+    : (typeof asset?.current_value === 'number' && typeof portfolioValue === 'number' && portfolioValue > 0)
+      ? (asset.current_value / portfolioValue)
+      : 0;
   
   return (
     <View style={styles.assetBreakdownCard}>
@@ -66,10 +85,10 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
         <View style={styles.assetTypeSection}>
           <View style={[
             styles.assetTypeBadge,
-            { backgroundColor: getAssetTypeColor(asset?.assetType) }
+            { backgroundColor: getAssetTypeColor((asset?.assetType || '').toString()) }
           ]}>
             <Text style={styles.assetTypeText}>
-              {(asset?.assetType ?? 'UNKNOWN').toUpperCase()}
+              {typeof displayType === 'string' ? displayType.toUpperCase() : 'UNKNOWN'}
             </Text>
           </View>
         </View>
@@ -119,7 +138,7 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
               </View>
               <View style={styles.identificationItem}>
                 <Text style={styles.identificationLabel}>Portfolio Weight</Text>
-                <Text style={styles.identificationValue}>{((asset?.weight ?? 0) * 100).toFixed(1)}%</Text>
+                <Text style={styles.identificationValue}>{(computedWeight * 100).toFixed(1)}%</Text>
               </View>
             </View>
           </View>
@@ -130,7 +149,9 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
             <View style={styles.valueComparison}>
               <View style={styles.valueRow}>
                 <Text style={styles.valueLabel}>Current Price</Text>
-                <Text style={styles.valueAmount}>${(asset?.price ?? 0).toFixed(2)}</Text>
+                <Text style={styles.valueAmount}>
+                  {typeof asset?.price === 'number' ? `$${asset.price.toFixed(2)}` : 'N/A'}
+                </Text>
               </View>
               <View style={styles.valueRow}>
                 <Text style={styles.valueLabel}>Current Value</Text>
@@ -166,11 +187,11 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
               How each risk factor contributed to this asset's stress impact
             </Text>
             {Object.entries(asset?.factor_contributions ?? {})
-              .filter(([_, value]) => Math.abs(value as number) > 0.01)
+              .filter(([_, value]) => value != null && typeof value === 'number' && Math.abs(value) > 0.01)
               .map(([factor, value]) => (
                 <View key={factor} style={styles.factorRow}>
                   <View style={styles.assetFactorHeader}>
-                    <Text style={styles.factorName}>{factor.toUpperCase()}</Text>
+                    <Text style={styles.factorName}>{typeof factor === 'string' ? factor.toUpperCase() : ''}</Text>
                     <Text style={[
                       styles.factorImpact,
                       { color: (value as number) >= 0 ? '#10b981' : '#ef4444' }
@@ -201,9 +222,9 @@ const AssetBreakdownCard: React.FC<AssetBreakdownCardProps> = ({ asset, rank }) 
 // ==========================================
 
 interface StressTestResultsPopupProps {
-  visible: boolean;
-  onClose: () => void;
-  results: StressTestResult | null;
+  visible?: boolean;
+  onClose?: () => void;
+  results?: StressTestResult | null;
   onRefresh?: () => void;
 }
 
@@ -217,12 +238,41 @@ interface TabType {
 // MAIN COMPONENT
 // ==========================================
 
-const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
-  visible,
-  onClose,
-  results,
-  onRefresh,
-}) => {
+const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo((props) => {
+  // Ultimate defensive prop handling to prevent any re-render issues
+  if (!React || !useState || !useEffect) {
+    console.error('React hooks not available in StressTestResultsPopup');
+    return null;
+  }
+
+  if (!props || typeof props !== 'object') {
+    console.error('StressTestResultsPopup: Invalid props received', props);
+    return null; // Return null instead of JSX to prevent any rendering issues
+  }
+
+  // Early exit if not visible to prevent any rendering issues
+  if (!props.visible) {
+    return null;
+  }
+
+  const {
+    visible = false,
+    onClose = () => {},
+    results = null,
+    onRefresh,
+  } = props;
+
+  // Additional safety checks
+  const isVisible = Boolean(visible);
+  const safeOnClose = React.useCallback(() => {
+    try {
+      if (typeof onClose === 'function') {
+        onClose();
+      }
+    } catch (error) {
+      console.error('Error in onClose:', error);
+    }
+  }, [onClose]);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -237,7 +287,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
   // Load display names when results change
   useEffect(() => {
     const loadDisplayNames = async () => {
-      if (results) {
+      if (results && results.metadata) {
         try {
           const scenarioName = await displayNameService.getScenarioDisplayName(results.metadata.scenarioId);
           const portfolioName = await displayNameService.getPortfolioDisplayName(results.metadata.portfolioId);
@@ -250,14 +300,16 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
           console.error('Error loading display names:', error);
           // Fallback to metadata names if display name service fails
           setDisplayNames({
-            scenarioName: results.metadata.scenarioName || results.metadata.scenarioId,
-            portfolioName: results.metadata.portfolioName || results.metadata.portfolioId
+            scenarioName: results.metadata?.scenarioName || results.metadata?.scenarioId || 'Unknown Scenario',
+            portfolioName: results.metadata?.portfolioName || results.metadata?.portfolioId || 'Unknown Portfolio'
           });
         }
       }
     };
 
-    loadDisplayNames();
+    // Use a timeout to prevent blocking the render cycle
+    const timeoutId = setTimeout(loadDisplayNames, 0);
+    return () => clearTimeout(timeoutId);
   }, [results]);
 
   const tabs: TabType[] = [
@@ -459,7 +511,10 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
   const renderAssetsTab = () => {
     if (!results) return null;
 
-    const topContributors = structuredStressTestService.getTopContributors(results.assetResults, 10);
+    const topContributors = structuredStressTestService.getTopContributors(
+      results.assetResults?.filter(asset => asset && typeof asset === 'object') || [], 
+      10
+    );
 
     return (
       <ScrollView style={styles.tabContent}>
@@ -476,9 +531,9 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
                 <View style={styles.assetTypeContainer}>
                   <View style={[
                     styles.assetTypeBadge,
-                    { backgroundColor: structuredStressTestService.getAssetTypeColor(asset.assetType) }
+                    { backgroundColor: structuredStressTestService.getAssetTypeColor((asset.assetType || '').toString()) }
                   ]}>
-                    <Text style={styles.assetTypeText}>{asset.assetType.toUpperCase()}</Text>
+                    <Text style={styles.assetTypeText}>{typeof asset.assetType === 'string' ? asset.assetType.toUpperCase() : 'UNKNOWN'}</Text>
                   </View>
                 </View>
               </View>
@@ -534,7 +589,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
           {factorSummary.map((factor) => (
             <View key={factor.factor} style={styles.factorAttributionRow}>
               <View style={styles.factorHeader}>
-                <Text style={styles.factorName}>{factor.factor.toUpperCase()}</Text>
+                <Text style={styles.factorName}>{typeof factor.factor === 'string' ? factor.factor.toUpperCase() : ''}</Text>
                 <Text style={styles.factorPercentage}>{(factor.percentage || 0).toFixed(1)}%</Text>
               </View>
               <View style={styles.factorImpactContainer}>
@@ -563,7 +618,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
           </Text>
           {Object.entries(results.scenarioFactors).map(([factor, value]) => (
             <View key={factor} style={styles.scenarioFactorRow}>
-              <Text style={styles.scenarioFactorName}>{factor.toUpperCase()}</Text>
+              <Text style={styles.scenarioFactorName}>{typeof factor === 'string' ? factor.toUpperCase() : ''}</Text>
               <Text style={[
                 styles.scenarioFactorValue,
                 { color: value >= 0 ? '#10b981' : '#ef4444' }
@@ -594,7 +649,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
           <View style={styles.portfolioSummary}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Assets</Text>
-              <Text style={styles.summaryValue}>{results.assetResults.length}</Text>
+              <Text style={styles.summaryValue}>{results.assetResults?.length || 0}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Portfolio Value</Text>
@@ -615,7 +670,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Assets with Impact</Text>
               <Text style={styles.summaryValue}>
-                {results.assetResults.filter(a => Math.abs(a.impact_value) > 0.01).length} of {results.assetResults.length}
+                {results.assetResults?.filter(a => a && typeof a.impact_value === 'number' && Math.abs(a.impact_value) > 0.01).length || 0} of {results.assetResults?.length || 0}
               </Text>
             </View>
           </View>
@@ -628,10 +683,11 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
             Detailed breakdown showing how each asset in your portfolio was affected by the stress scenario
           </Text>
           
-          {results.assetResults
-            .sort((a, b) => Math.abs(b.impact_value) - Math.abs(a.impact_value))
+          {(results.assetResults || [])
+            .filter(asset => asset && typeof asset === 'object' && asset.symbol && typeof asset.impact_value === 'number')
+            .sort((a, b) => Math.abs(b.impact_value || 0) - Math.abs(a.impact_value || 0))
             .map((asset, index) => (
-              <AssetBreakdownCard key={asset.symbol} asset={asset} rank={index + 1} />
+              <AssetBreakdownCard key={asset.symbol || `asset-${index}`} asset={asset} rank={index + 1} portfolioValue={results.portfolioValue} />
           ))}
         </View>
       </ScrollView>
@@ -792,7 +848,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
 
   if (!results) {
     return (
-      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={isVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.container}>
           {renderHeader()}
           <View style={styles.emptyContainer}>
@@ -805,7 +861,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={isVisible} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.container}>
         {renderHeader()}
         {renderTabs()}
@@ -815,7 +871,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = ({
       </View>
     </Modal>
   );
-};
+});
 
 // ==========================================
 // STYLES
@@ -1359,6 +1415,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+    padding: 16,
+    fontStyle: 'italic',
   },
 });
 

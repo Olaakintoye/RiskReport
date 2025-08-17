@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import portfolioService, { suggestTrimConcentration, suggestAddHedge } from '../../services/portfolioService';
 
 interface Recommendation {
   id: string;
@@ -27,7 +28,7 @@ interface ActionableRecommendationsProps {
 }
 
 const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
-  portfolioIds,
+  portfolioIds = [],
   onRecommendationPress,
   onDismiss
 }) => {
@@ -141,11 +142,11 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
   const getRecommendationIcon = (type: Recommendation['type']) => {
     switch (type) {
       case 'rebalance':
-        return 'scale-balance';
+        return 'scale';
       case 'tax_harvest':
-        return 'cash-multiple';
+        return 'cash';
       case 'dividend':
-        return 'dividend';
+        return 'cash';
       case 'optimization':
         return 'tune';
       case 'risk_alert':
@@ -209,6 +210,36 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
   const handleDismiss = (recommendationId: string) => {
     setRecommendations(prev => prev.filter(r => r.id !== recommendationId));
     onDismiss?.(recommendationId);
+  };
+
+  const handleQuickApply = async (recommendation: Recommendation) => {
+    try {
+      const targetPortfolioId = portfolioIds?.[0];
+      if (!targetPortfolioId) {
+        Alert.alert('No Portfolio', 'Please create or select a portfolio first.');
+        return;
+      }
+      const portfolio = await portfolioService.getPortfolioById(targetPortfolioId);
+      if (!portfolio) {
+        Alert.alert('Not Found', 'Unable to load the selected portfolio.');
+        return;
+      }
+
+      if (recommendation.type === 'rebalance' || recommendation.type === 'risk_alert') {
+        const { updatedPortfolio, changes } = suggestTrimConcentration(portfolio, { maxWeight: 0.15, trimFraction: 0.25 });
+        await portfolioService.updatePortfolio(updatedPortfolio);
+        Alert.alert('Rebalanced', `Applied ${changes.length} trim action(s) to reduce concentration.`);
+      } else if (recommendation.type === 'optimization') {
+        const { updatedPortfolio, changes } = suggestAddHedge(portfolio, { symbol: 'TLT', hedgeWeight: 0.05 });
+        await portfolioService.updatePortfolio(updatedPortfolio);
+        Alert.alert('Hedge Added', `Applied ${changes.length} hedge action(s) to improve risk profile.`);
+      } else {
+        Alert.alert('Action Not Automated', 'This recommendation requires manual review.');
+      }
+    } catch (error: any) {
+      console.error('Quick apply failed', error);
+      Alert.alert('Failed', error?.message || 'Could not apply the recommendation.');
+    }
   };
 
   const filteredRecommendations = recommendations.filter(
@@ -336,6 +367,15 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
               <Text style={styles.actionText}>{recommendation.action.label}</Text>
               <MaterialCommunityIcons name="chevron-right" size={16} color="#64748b" />
             </View>
+
+            <View style={styles.quickActionsRow}>
+              {(recommendation.type === 'rebalance' || recommendation.type === 'risk_alert' || recommendation.type === 'optimization') && (
+                <TouchableOpacity style={styles.quickActionButton} onPress={() => handleQuickApply(recommendation)}>
+                  <MaterialCommunityIcons name="lightning-bolt" size={16} color="#fff" />
+                  <Text style={styles.quickActionText}>One‑Tap Fix</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -354,6 +394,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 1,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    justifyContent: 'flex-end'
+  },
+  quickActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#273c75',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  quickActionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600'
   },
   loadingContainer: {
     backgroundColor: '#fff',
@@ -479,12 +538,12 @@ const styles = StyleSheet.create({
   recommendationMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   priorityBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
+    marginRight: 8,
   },
   priorityText: {
     fontSize: 10,
@@ -529,12 +588,12 @@ const styles = StyleSheet.create({
   confidenceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   confidenceLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: '#64748b',
+    marginRight: 8,
   },
   confidenceBar: {
     flex: 1,
@@ -542,6 +601,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     borderRadius: 2,
     overflow: 'hidden',
+    marginRight: 8,
   },
   confidenceBarFill: {
     height: '100%',
@@ -558,18 +618,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 12,
     borderRadius: 8,
-    gap: 8,
   },
   actionLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: '#64748b',
+    marginRight: 8,
   },
   actionText: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#3b82f6',
+    marginRight: 8,
   },
 });
 

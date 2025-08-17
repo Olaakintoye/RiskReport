@@ -1208,6 +1208,16 @@ const exportScenarioToPDF = async (scenarioRun: ScenarioRun): Promise<void> => {
 };
 
 const ScenariosScreen: React.FC = () => {
+  // Add defensive check for React hooks
+  if (!React || !useState) {
+    console.error('React hooks not available');
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
   // Basic state
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [scenarioRuns, setScenarioRuns] = useState<ScenarioRun[]>([]);
@@ -1720,55 +1730,119 @@ const ScenariosScreen: React.FC = () => {
       console.log('📤 Request Body:', requestBody);
       
       // Call the stress test API to get detailed results with asset breakdown
-      let response = await fetch('http://localhost:3000/api/stress-test/run', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-      
-      console.log('📥 Response Status:', response.status);
-      console.log('📥 Response OK:', response.ok);
-      
-      // If the mapped IDs fail, try with different portfolios as fallback
-      if (!response.ok) {
-        console.log('⚠️ Mapped IDs failed, trying with fallback portfolios...');
-        
-        // Try different portfolios in order of preference
-        const fallbackPortfolios = ['income-portfolio', 'growth-portfolio', 'balanced-portfolio'];
-        
-        for (const fallbackPortfolioId of fallbackPortfolios) {
-          if (fallbackPortfolioId === apiPortfolioId) continue; // Skip if already tried
-          
-          console.log(`🔄 Trying fallback portfolio: ${fallbackPortfolioId}`);
-          const fallbackRequestBody = {
-            scenarioId: apiScenarioId,
-            portfolioId: fallbackPortfolioId,
-            options: {
-              confidenceLevel: 0.95,
-              timeHorizon: 1
-            }
-          };
-          
-          response = await fetch('http://localhost:3000/api/stress-test/run', {
+      // Use centralized API bases to resolve correct host/ports
+      const { STRESS_BASE } = await import('../../config/api');
+      let baseUrl = STRESS_BASE;
+      console.log('📡 Using Stress API Base:', baseUrl);
+
+      // Connectivity pre-check and base URL fallbacks
+      const candidates: string[] = [];
+      candidates.push(baseUrl);
+      try {
+        const Constants = (await import('expo-constants')).default as any;
+        const host = Constants?.debuggerHost || Constants?.expoConfig?.hostUri;
+        if (typeof host === 'string' && host.length > 0) {
+          const ip = host.split(':')[0];
+          if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+            candidates.push(`http://${ip}:3000`);
+          }
+        }
+        const extra = Constants?.expoConfig?.extra || Constants?.manifest?.extra;
+        if (extra?.stressBase && typeof extra.stressBase === 'string') {
+          candidates.push(extra.stressBase);
+        }
+      } catch {}
+      candidates.push('http://localhost:3000');
+      console.log('🔎 Stress API Candidates:', candidates);
+
+      let healthyBase: string | null = null;
+      for (const cand of candidates) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 2500);
+          const health = await fetch(`${cand}/api/status`, { method: 'GET', signal: controller.signal });
+          clearTimeout(timeout);
+          if ((health as any)?.ok) {
+            healthyBase = cand;
+            break;
+          }
+        } catch {}
+      }
+      if (healthyBase) {
+        baseUrl = healthyBase;
+      }
+      console.log('✅ Stress API Selected Base:', baseUrl);
+
+      // Helper with timeout
+      const fetchWithTimeout = async (url: string, options: any, timeoutMs: number) => {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { ...options, signal: controller.signal });
+          return res;
+        } finally {
+          clearTimeout(id);
+        }
+      };
+
+      let response: Response | null = null;
+      const baseAttempts = Array.from(new Set([baseUrl, ...candidates]));
+      let lastError: any = null;
+      for (const base of baseAttempts) {
+        try {
+          console.log('🌐 Attempting stress run via:', base);
+          response = await fetchWithTimeout(`${base}/api/stress-test/run`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(fallbackRequestBody)
-          });
-          
+            body: JSON.stringify(requestBody)
+          }, 10000);
+          if (response.ok) {
+            baseUrl = base;
+            break;
+          }
+          console.log('⚠️ Non-OK response:', response.status, response.statusText);
+        } catch (e) {
+          console.warn('⚠️ Network attempt failed for base:', base, e);
+          lastError = e;
+          continue;
+        }
+      }
+
+      if (!response) {
+        throw lastError || new Error('No response from any stress API base');
+      }
+
+      console.log('📥 Response Status:', response.status);
+      console.log('📥 Response OK:', response.ok);
+
+      // If the mapped IDs fail, try with different portfolios as fallback (same selected base)
+      if (!response.ok) {
+        console.log('⚠️ Mapped IDs failed, trying with fallback portfolios...');
+        const fallbackPortfolios = ['income-portfolio', 'growth-portfolio', 'balanced-portfolio'];
+        for (const fallbackPortfolioId of fallbackPortfolios) {
+          if (fallbackPortfolioId === apiPortfolioId) continue;
+          console.log(`🔄 Trying fallback portfolio: ${fallbackPortfolioId}`);
+          const fallbackRequestBody = {
+            scenarioId: apiScenarioId,
+            portfolioId: fallbackPortfolioId,
+            options: { confidenceLevel: 0.95, timeHorizon: 1 }
+          };
+          try {
+            response = await fetchWithTimeout(`${baseUrl}/api/stress-test/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(fallbackRequestBody)
+            }, 10000);
+          } catch (e) {
+            console.warn('⚠️ Fallback attempt failed:', e);
+            continue;
+          }
           console.log(`📥 Fallback Response (${fallbackPortfolioId}):`, response.status, response.ok);
-          
           if (response.ok) {
             console.log(`✅ Success with fallback portfolio: ${fallbackPortfolioId}`);
-            // Show user-friendly message about using fallback portfolio
-            Alert.alert(
-              'Portfolio Not Found',
-              `The original portfolio "${selectedRun.portfolioName}" was not found in the stress test system. Using "${fallbackPortfolioId}" as a substitute to show the asset breakdown.`,
-              [{ text: 'OK' }]
-            );
+            Alert.alert('Portfolio Not Found', `The original portfolio "${selectedRun.portfolioName}" was not found in the stress test system. Using "${fallbackPortfolioId}" as a substitute to show the asset breakdown.`, [{ text: 'OK' }]);
             break;
           }
         }
@@ -2251,11 +2325,31 @@ const ScenariosScreen: React.FC = () => {
           onCreatePortfolio={handleCreateHedgedPortfolio}
         />
         
-        <StressTestResultsPopup
-          visible={showDetailedResults}
-          onClose={() => setShowDetailedResults(false)}
-          results={detailedResults}
-        />
+        {/* Render StressTestResultsPopup with complete isolation */}
+        {(() => {
+          try {
+            if (showDetailedResults === true && React.isValidElement) {
+              return (
+                <StressTestResultsPopup
+                  visible={true}
+                  onClose={() => {
+                    try {
+                      setShowDetailedResults(false);
+                    } catch (error) {
+                      console.error('Error closing popup:', error);
+                    }
+                  }}
+                  results={detailedResults}
+                />
+              );
+            }
+            return null;
+          } catch (error) {
+            console.error('Error rendering StressTestResultsPopup:', error);
+            setShowDetailedResults(false);
+            return null;
+          }
+        })()}
       </View>
     );
   }

@@ -1,88 +1,70 @@
 #!/bin/bash
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+echo "🚀 Starting All Risk Analysis Servers..."
+echo "========================================"
 
-echo -e "${BLUE}🚀 Starting all Risk Report servers...${NC}\n"
-
-# Function to check if a port is in use
-check_port() {
+# Function to check if server is running
+check_server() {
     local port=$1
-    local process_name=$2
-    
-    if lsof -i :$port > /dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Port $port is already in use by $process_name${NC}"
+    local name=$2
+    if lsof -i :$port >/dev/null 2>&1; then
+        echo "✅ $name is already running on port $port"
         return 0
     else
+        echo "❌ $name is not running on port $port"
         return 1
     fi
 }
 
-# Function to start a server
-start_server() {
-    local name=$1
-    local dir=$2
-    local command=$3
-    local port=$4
-    local process_name=$5
-    
-    echo -e "${BLUE}Starting $name...${NC}"
-    
-    if check_port $port "$process_name"; then
-        echo -e "${GREEN}✅ $name is already running on port $port${NC}\n"
-        return 0
-    fi
-    
-    cd "$dir"
-    eval "$command" &
-    local pid=$!
-    echo "Started $name with PID: $pid"
-    
-    # Wait a moment for server to start
-    sleep 3
-    
-    # Check if the server is actually running
-    if check_port $port "$process_name"; then
-        echo -e "${GREEN}✅ $name started successfully on port $port${NC}\n"
-    else
-        echo -e "${RED}❌ Failed to start $name on port $port${NC}\n"
-    fi
+# Function to kill existing servers
+kill_servers() {
+    echo "🧹 Cleaning up existing servers..."
+    pkill -f "node.*server.js" 2>/dev/null || true
+    pkill -f "node.*var-api.js" 2>/dev/null || true
+    sleep 2
 }
 
-# Get the script directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+# Kill any existing servers first
+kill_servers
 
-# Start VaR API Server (port 3001)
-start_server "VaR API Server" "$SCRIPT_DIR/server" "node var-api.js" 3001 "VaR API"
-
-# Start Main App Server (port 3000)
-start_server "Main App Server" "$SCRIPT_DIR/server" "npm start" 3000 "Main App"
-
-# Start Frontend Client (port varies - usually 19006 for Expo)
-echo -e "${BLUE}Starting Frontend Client...${NC}"
-cd "$SCRIPT_DIR/client"
-npm start &
-echo -e "${GREEN}✅ Frontend client starting...${NC}"
-echo -e "${YELLOW}Note: Frontend will start on a port assigned by Expo (usually 19006)${NC}\n"
-
-echo -e "${GREEN}🎉 All servers started!${NC}\n"
-
-echo -e "${BLUE}Server Status:${NC}"
-echo "• VaR API Server: http://localhost:3001"
-echo "• Main App Server: http://localhost:3000"
-echo "• Frontend Client: Check Expo output for the actual port"
 echo ""
+echo "🔄 Starting Backend Servers..."
 
-echo -e "${BLUE}To test VaR analysis:${NC}"
-echo "node test-var-analysis.js"
+# Start VaR Analysis Server (Port 3001)
+echo "Starting VaR Analysis Server on port 3001..."
+./start-backend.sh &
+sleep 3
+
+# Start Stress Test Server (Port 3000)
+echo "Starting Stress Test Server on port 3000..."
+cd server && node server.js &
+STRESS_SERVER_PID=$!
+cd ..
+sleep 3
+
 echo ""
+echo "🧪 Checking Server Status..."
 
-echo -e "${BLUE}To stop all servers:${NC}"
-echo "./stop-all-servers.sh"
-echo ""
-
-echo -e "${YELLOW}Note: Servers are running in the background. Check terminal output for any errors.${NC}"
+# Check both servers
+if check_server 3001 "VaR Analysis Server" && check_server 3000 "Stress Test Server"; then
+    echo ""
+    echo "🎉 ALL SERVERS STARTED SUCCESSFULLY!"
+    echo "=================================="
+    echo "✅ VaR Analysis API: http://localhost:3001/api/"
+    echo "✅ Stress Test API: http://localhost:3000/api/"
+    echo ""
+    echo "📱 Your React Native app should now work without network errors!"
+    echo ""
+    echo "🔧 Available APIs:"
+    echo "  - Parametric VaR: POST http://localhost:3001/api/run-var"
+    echo "  - Historical VaR: POST http://localhost:3001/api/run-var"
+    echo "  - Monte Carlo VaR: POST http://localhost:3001/api/run-var"
+    echo "  - Stress Testing: POST http://localhost:3000/api/stress-test/run"
+    echo ""
+    echo "💡 To stop all servers: pkill -f 'node.*server'"
+else
+    echo ""
+    echo "❌ SOME SERVERS FAILED TO START"
+    echo "Please check the logs above for errors"
+    exit 1
+fi

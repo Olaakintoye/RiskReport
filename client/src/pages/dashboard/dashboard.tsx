@@ -204,7 +204,7 @@ export default function UnifiedDashboard() {
                   styles.gaugeProgress,
                   { 
                     width: `${riskBudgetUsage * 100}%`,
-                    backgroundColor: riskBudgetUsage > 0.8 ? '#ef4444' : riskBudgetUsage > 0.6 ? '#f59e0b' : '#10b981' 
+                    backgroundColor: '#000000' // Changed to black
                   }
                 ]} 
               />
@@ -255,9 +255,7 @@ export default function UnifiedDashboard() {
                         styles.riskBarFill,
                         { 
                           width: `${Math.min((risk.value / risk.limit) * 100, 100)}%`,
-                          backgroundColor: risk.value / risk.limit > 0.8 ? '#ef4444' : 
-                                          risk.value / risk.limit > 0.6 ? '#f59e0b' : 
-                                          '#10b981'
+                          backgroundColor: '#000000' // Changed to black
                         }
                       ]}
                     />

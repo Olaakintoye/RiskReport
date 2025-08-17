@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SP500Company } from '../../services/sp500Service';
 import sp500Service from '../../services/sp500Service';
 import tiingoService from '../../services/tiingoService';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 interface SP500CompanyCardProps {
   company: SP500Company;
@@ -25,7 +26,7 @@ const SP500CompanyCard: React.FC<SP500CompanyCardProps> = ({
   const [price, setPrice] = useState<number | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
 
   useEffect(() => {
     fetchPriceData();
@@ -65,7 +66,7 @@ const SP500CompanyCard: React.FC<SP500CompanyCardProps> = ({
       console.error(`Error fetching price for ${company.symbol}:`, error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+
     }
   };
 
@@ -88,19 +89,13 @@ const SP500CompanyCard: React.FC<SP500CompanyCardProps> = ({
     return sectorColors[sector] || '#6b7280'; // default gray
   };
 
-  // Handle refresh button click
-  const handleRefresh = () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    
-    // Clear the Tiingo cache for this symbol
-    if (typeof tiingoService.clearCache === 'function') {
-      tiingoService.clearCache();
-    }
-    
-    // Fetch fresh price data
-    fetchPriceData();
-  };
+  // Auto-refresh price data every 6 minutes
+  useAutoRefresh({
+    interval: 6 * 60 * 1000, // 6 minutes
+    enabled: true,
+    onRefresh: fetchPriceData,
+    respectMarketHours: true
+  });
 
   return (
     <TouchableOpacity
@@ -132,23 +127,9 @@ const SP500CompanyCard: React.FC<SP500CompanyCardProps> = ({
           <ActivityIndicator size="small" color="#3b82f6" />
         ) : (
           <>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>
-                ${price !== null ? price.toFixed(2) : '—'}
-              </Text>
-              <TouchableOpacity 
-                style={styles.refreshButton}
-                onPress={handleRefresh}
-                disabled={refreshing}
-              >
-                <Ionicons 
-                  name={refreshing ? "sync-circle" : "sync"} 
-                  size={14} 
-                  color="#3b82f6" 
-                  style={refreshing ? styles.rotating : undefined}
-                />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.price}>
+              ${price !== null ? price.toFixed(2) : '—'}
+            </Text>
             {priceChange !== null && typeof priceChange === 'number' && (
               <Text style={[
                 styles.priceChange,
@@ -222,21 +203,11 @@ const styles = StyleSheet.create({
   priceContainer: {
     alignItems: 'flex-end',
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+
   price: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1e293b',
-    marginRight: 4,
-  },
-  refreshButton: {
-    padding: 2,
-  },
-  rotating: {
-    opacity: 0.7,
   },
   priceChange: {
     fontSize: 12,

@@ -51,6 +51,8 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Allow CDInvestmentPro to access your camera to record videos.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to use Face ID</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSPhotoLibraryUsageDescription</key>

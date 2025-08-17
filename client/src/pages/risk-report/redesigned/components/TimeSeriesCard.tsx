@@ -162,11 +162,26 @@ const TimeSeriesCard: React.FC<TimeSeriesCardProps> = ({
           'beta': 'beta'
         };
         
-        const data = await riskTrackingService.getTimeSeriesData(
+        let data = await riskTrackingService.getTimeSeriesData(
           portfolioId, 
           metricTypeMap[selectedMetric], 
           selectedTimeFrame
         );
+      // Ensure the last point reflects the latest on-screen analysis values
+      if (data && data.datasets && data.datasets[0] && data.datasets[0].data.length > 0) {
+        const updated = { ...data, datasets: data.datasets.map(ds => ({ ...ds, data: [...ds.data] })) };
+        const lastIndex = updated.datasets[0].data.length - 1;
+        if (selectedMetric === 'var' && varResults?.varPercentage !== undefined) {
+          updated.datasets[0].data[lastIndex] = varResults.varPercentage;
+        } else if (selectedMetric === 'volatility' && riskMetrics?.volatility !== undefined) {
+          updated.datasets[0].data[lastIndex] = riskMetrics.volatility;
+        } else if (selectedMetric === 'sharpe' && riskMetrics?.sharpeRatio !== undefined) {
+          updated.datasets[0].data[lastIndex] = riskMetrics.sharpeRatio;
+        } else if (selectedMetric === 'beta' && riskMetrics?.beta !== undefined) {
+          updated.datasets[0].data[lastIndex] = riskMetrics.beta;
+        }
+        data = updated;
+      }
       setTimeSeriesData(data);
     } catch (error) {
       console.error('Error loading time series data:', error);
@@ -198,6 +213,7 @@ const TimeSeriesCard: React.FC<TimeSeriesCardProps> = ({
     const values = timeSeriesData.datasets[0].data;
     const startValue = values[0];
     const endValue = values[values.length - 1];
+    if (!startValue) return 0;
     return ((endValue - startValue) / startValue) * 100;
   };
 
@@ -429,6 +445,14 @@ const TimeSeriesCard: React.FC<TimeSeriesCardProps> = ({
           style={styles.chart}
           fromZero={selectedMetric === 'var' || selectedMetric === 'volatility'}
           yAxisSuffix={metricConfig.suffix}
+          formatYLabel={(v: string) => {
+            // Keep y-axis units consistent with data
+            const num = Number(v);
+            if (selectedMetric === 'sharpe' || selectedMetric === 'beta') {
+              return num.toFixed(2);
+            }
+            return num.toFixed(1);
+          }}
           yAxisInterval={1}
           withInnerLines={false}
           withOuterLines={true}

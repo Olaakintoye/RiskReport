@@ -5,13 +5,23 @@ const exclusionList = require('metro-config/src/defaults/exclusionList');
 
 const config = getDefaultConfig(__dirname);
 
-// Configure transformer
+// Optimize for development performance
+config.maxWorkers = 4; // Limit workers for better performance
+config.resetCache = false; // Keep cache for faster builds
+
+// Configure transformer with optimizations
 config.transformer = {
   ...config.transformer,
   babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  minifierConfig: {
+    keep_fnames: true,
+    mangle: {
+      keep_fnames: true,
+    },
+  },
 };
 
-// Configure resolver
+// Configure resolver with performance optimizations
 config.resolver = {
   ...config.resolver,
   sourceExts: ['jsx', 'js', 'ts', 'tsx', 'json', 'cjs', 'mjs'],
@@ -29,6 +39,10 @@ config.resolver = {
     /drizzle-zod\/.*/,
     /pg\/.*/,
     /node_modules\/wouter\/.*/,
+    /node_modules\/.*\/node_modules\/.*/, // Exclude nested node_modules
+    /\.git\/.*/, // Exclude git files
+    /\.vscode\/.*/, // Exclude VS Code files
+    /\.idea\/.*/, // Exclude IntelliJ files
   ]),
   resolverMainFields: ['react-native', 'browser', 'main'],
   // Disable package.json exports to fix Node.js module issues
@@ -51,6 +65,12 @@ config.resolver = {
     return context.resolveRequest(context, moduleName, platform);
   }
 };
+
+// Optimize watcher for better performance
+config.watchFolders = [
+  path.resolve(__dirname, 'client/src'),
+  path.resolve(__dirname, 'shared'),
+];
 
 // Remove any serializer configuration that might be causing issues
 if (config.serializer && config.serializer.isThirdPartyModule) {

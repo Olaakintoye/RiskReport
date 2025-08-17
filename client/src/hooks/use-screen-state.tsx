@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -20,6 +21,16 @@ const ScreenStateContext = createContext<ScreenStateContextType | undefined>(und
 const SCREEN_STATE_STORAGE_KEY = 'screen_state_persistence';
 
 export function ScreenStateProvider({ children }: { children: React.ReactNode }) {
+  // Add defensive check for React hooks
+  if (!React || !useState || !useEffect) {
+    console.error('React hooks not available in ScreenStateProvider');
+    return (
+      <View style={{ flex: 1 }}>
+        {children}
+      </View>
+    );
+  }
+
   const [screenStates, setScreenStates] = useState<ScreenState>({});
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -82,7 +93,20 @@ export function ScreenStateProvider({ children }: { children: React.ReactNode })
   };
 
   if (!isLoaded) {
-    return null; // Or a loading spinner
+    // Don't return null as it breaks the component tree
+    // Instead, provide a basic context while loading
+    return (
+      <ScreenStateContext.Provider
+        value={{
+          getScreenState: () => ({}),
+          setScreenState: () => {},
+          clearScreenState: () => {},
+          clearAllScreenState: async () => {},
+        }}
+      >
+        {children}
+      </ScreenStateContext.Provider>
+    );
   }
 
   return (

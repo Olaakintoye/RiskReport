@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  RefreshControl,
+
   Animated,
   Dimensions,
   Platform
@@ -27,6 +27,9 @@ import { usePersistentState } from '../../hooks/use-screen-state';
 
 // Import the SP500PortfolioWizard
 import SP500PortfolioWizard from './SP500PortfolioWizard';
+
+// Import auto-refresh hook
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 // Import the EditPortfolioModal
 import EditPortfolioModal from '../../components/portfolio/EditPortfolioModal';
@@ -68,7 +71,7 @@ const PortfolioScreen: React.FC = () => {
   const [portfolios, setPortfolios] = useState<PortfolioSummary[]>([]);
   const [filteredPortfolios, setFilteredPortfolios] = useState<PortfolioSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
   const [searchQuery, setSearchQuery] = usePersistentState<string>('PortfolioScreen', 'searchQuery', '');
   const [showSP500Wizard, setShowSP500Wizard] = useState(false);
   const [viewMode, setViewMode] = usePersistentState<ViewMode>('PortfolioScreen', 'viewMode', {
@@ -107,7 +110,6 @@ const PortfolioScreen: React.FC = () => {
       );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
   
@@ -115,34 +117,35 @@ const PortfolioScreen: React.FC = () => {
   useEffect(() => {
     loadPortfolios();
   }, []);
-  
+
   useFocusEffect(
     useCallback(() => {
       loadPortfolios();
     }, [])
   );
 
-  // Refresh function
+  // Auto-refresh function for portfolios
   const refreshPortfolios = async () => {
-    setRefreshing(true);
     try {
       await portfolioService.getAllPortfolios();
       const portfolioSummaries = await portfolioService.getPortfolioSummaries();
       setPortfolios(portfolioSummaries);
       setFilteredPortfolios(portfolioSummaries);
       
-      console.log('Refreshed portfolios with real-time prices');
+      console.log('Auto-refreshed portfolios with real-time prices');
     } catch (error) {
-      console.error('Error refreshing portfolios:', error);
-      Alert.alert(
-        'Error',
-        'Failed to refresh portfolios with real-time data. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setRefreshing(false);
+      console.error('Error auto-refreshing portfolios:', error);
+      // Silent fail for auto-refresh to avoid interrupting user
     }
   };
+
+  // Auto-refresh portfolios every 10 minutes
+  useAutoRefresh({
+    interval: 10 * 60 * 1000, // 10 minutes
+    enabled: !loading,
+    onRefresh: refreshPortfolios,
+    respectMarketHours: true
+  });
 
   // Handle portfolio selection
   const handlePortfolioPress = async (portfolio: PortfolioSummary) => {
@@ -288,7 +291,7 @@ const PortfolioScreen: React.FC = () => {
   }
 
   // Render loading state
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -316,18 +319,7 @@ const PortfolioScreen: React.FC = () => {
         </View>
         
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={refreshPortfolios}
-            disabled={refreshing}
-          >
-            <Ionicons 
-              name={refreshing ? "sync-circle" : "sync"} 
-              size={24} 
-              color="#3b82f6" 
-              style={refreshing ? styles.rotating : undefined}
-            />
-          </TouchableOpacity>
+
           
           <TouchableOpacity 
             style={styles.createButton}
@@ -341,14 +333,7 @@ const PortfolioScreen: React.FC = () => {
 
       <ScrollView 
         style={styles.scrollContainer}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={refreshPortfolios}
-            colors={['#10b981']}
-            tintColor="#10b981"
-          />
-        }
+
         showsVerticalScrollIndicator={false}
       >
         {/* Portfolio Summary Stats */}
@@ -592,13 +577,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  refreshButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  rotating: {
-    opacity: 0.7,
-  },
+
+
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -28,6 +28,7 @@ import PositionRiskAnalysis from '../../components/risk-contribution/PositionRis
 import BenchmarkComparison from '../../components/benchmark/BenchmarkComparison';
 import TimeSeriesRiskTracker from '../../components/risk-tracking/TimeSeriesRiskTracker';
 import ExportTools from '../../components/export/ExportTools';
+import BacktestCard from '../risk-report/redesigned/components/BacktestCard';
 
 const DEFAULT_VAR_PARAMS: VaRParams = {
   confidenceLevel: 0.95,
@@ -37,7 +38,8 @@ const DEFAULT_VAR_PARAMS: VaRParams = {
 
 // Update with your actual server IP address and port for mobile/simulator access
 // Example: const API_URL = 'http://192.168.1.100:3001';
-const API_URL = 'http://localhost:3001'; // <-- Replace with your computer's local IP address
+import API_BASE from '../config/api';
+const API_URL = API_BASE; // Use centralized API base
 
 // Add VarAnalysisModal component inline for now
 const CONFIDENCE_LEVELS = [0.90, 0.95, 0.99];
@@ -554,8 +556,8 @@ const RiskReportScreen: React.FC = () => {
       setActiveVarChart('parametric'); // Start with parametric view
       
       Alert.alert(
-        'VaR Analysis Complete',
-        'All three VaR models have been calculated successfully.',
+        'Analysis Complete',
+        '',
         [{ text: 'OK' }]
       );
     } catch (error: any) {
@@ -874,6 +876,9 @@ const RiskReportScreen: React.FC = () => {
       <BenchmarkComparison 
         portfolioId={selectedPortfolioSummary?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'} 
       />
+
+      {/* Backtesting */}
+      <BacktestCard portfolio={selectedPortfolio} />
       
       {/* PDF/Excel export component */}
       <ExportTools 

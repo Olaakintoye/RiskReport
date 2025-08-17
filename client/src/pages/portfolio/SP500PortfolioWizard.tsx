@@ -18,6 +18,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import sp500Service, { SP500Company } from '../../services/sp500Service';
 import portfolioService, { Asset } from '../../services/portfolioService';
 import tiingoService from '../../services/tiingoService';
+import useAutoRefresh from '../../hooks/useAutoRefresh';
 
 // Import components
 import SP500SectorSelector from '@/components/portfolio/SP500SectorSelector';
@@ -45,7 +46,7 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
   const [isCreating, setIsCreating] = useState(false);
   const [portfolioType, setPortfolioType] = useState<'equity' | 'fixed_income' | 'multi_asset'>('equity');
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
-  const [refreshingPrices, setRefreshingPrices] = useState(false);
+
 
   // Load initial data
   useEffect(() => {
@@ -91,6 +92,22 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
     
     setFilteredCompanies(filtered);
   }, [selectedSector, searchQuery, companies]);
+
+  // Auto-refresh for company prices in select step (every 5 minutes)
+  useAutoRefresh({
+    interval: 5 * 60 * 1000, // 5 minutes
+    enabled: step === 'select' && filteredCompanies.length > 0,
+    onRefresh: refreshAllCompanyPrices,
+    respectMarketHours: true
+  });
+
+  // Auto-refresh for selected asset prices in review step (every 8 minutes)
+  useAutoRefresh({
+    interval: 8 * 60 * 1000, // 8 minutes
+    enabled: step === 'review' && selectedAssets.length > 0,
+    onRefresh: refreshAllPrices,
+    respectMarketHours: true
+  });
 
   // Handle sector selection
   const handleSectorSelect = (sector: string) => {
@@ -261,18 +278,17 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
     }
   };
 
-  // Function to refresh all asset prices
+  // Function to refresh all asset prices (now for auto-refresh)
   const refreshAllPrices = async () => {
     if (selectedAssets.length === 0) return;
     
-    setIsCreating(true); // Reuse the isCreating state to show loading
     try {
       // Clear the Tiingo cache to force fresh data
       tiingoService.clearCache();
       
       // Get all the tickers from the selected assets
       const symbols = selectedAssets.map(asset => asset.symbol);
-      console.log('Refreshing prices for:', symbols.join(', '));
+      console.log('Auto-refreshing prices for:', symbols.join(', '));
       
       // Try to batch fetch real-time prices for all assets
       const pricesData = await tiingoService.getBatchRealTimePrices(symbols);
@@ -283,7 +299,7 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
         if (tickerData && (tickerData.tngoLast || tickerData.last)) {
           // Use tngoLast if available, otherwise fallback to last
           const realTimePrice = tickerData.tngoLast || tickerData.last;
-          console.log(`Updated ${asset.symbol} price: $${realTimePrice} (real-time)`);
+          console.log(`Auto-updated ${asset.symbol} price: $${realTimePrice}`);
           return {
             ...asset,
             price: realTimePrice
@@ -296,37 +312,23 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
       
       // Update the selected assets with real-time prices
       setSelectedAssets(updatedAssets);
-      
-      // Show confirmation
-      Alert.alert(
-        'Prices Updated',
-        'All assets have been updated with real-time market data.',
-        [{ text: 'OK' }]
-      );
     } catch (error) {
-      console.error('Error refreshing asset prices:', error);
-      Alert.alert(
-        'Update Failed',
-        'Unable to refresh asset prices. Please try again later.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsCreating(false);
+      console.error('Error auto-refreshing asset prices:', error);
+      // Don't show alert for auto-refresh failures to avoid interrupting user
     }
   };
 
-  // Add function to refresh all visible company prices
+  // Function to refresh all visible company prices (now for auto-refresh)
   const refreshAllCompanyPrices = async () => {
-    if (refreshingPrices || filteredCompanies.length === 0) return;
+    if (filteredCompanies.length === 0) return;
     
-    setRefreshingPrices(true);
     try {
       // Clear Tiingo cache to get fresh data
       tiingoService.clearCache();
       
       // Get symbols for companies currently displayed
       const symbols = filteredCompanies.slice(0, 25).map(company => company.symbol);
-      console.log(`Refreshing prices for ${symbols.length} companies...`);
+      console.log(`Auto-refreshing prices for ${symbols.length} companies...`);
       
       // Batch request real-time prices
       await tiingoService.getBatchRealTimePrices(symbols);
@@ -334,11 +336,10 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
       // Force re-render of company cards
       setFilteredCompanies([...filteredCompanies]);
       
-      console.log(`Successfully refreshed prices for ${symbols.length} companies`);
+      console.log(`Successfully auto-refreshed prices for ${symbols.length} companies`);
     } catch (error) {
-      console.error('Error refreshing company prices:', error);
-    } finally {
-      setRefreshingPrices(false);
+      console.error('Error auto-refreshing company prices:', error);
+      // Don't show alert for auto-refresh failures
     }
   };
 
@@ -525,19 +526,6 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
               <Text style={styles.badge}>{selectedAssets.length}</Text>
             </View>
             <TouchableOpacity 
-              style={styles.refreshPricesButton}
-              onPress={refreshAllCompanyPrices}
-              disabled={refreshingPrices}
-            >
-              <Ionicons 
-                name={refreshingPrices ? "sync-circle" : "sync"} 
-                size={16} 
-                color="#3b82f6" 
-                style={refreshingPrices ? styles.rotating : undefined}
-              />
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
               style={[styles.topReviewButton, selectedAssets.length === 0 && styles.disabledButton]}
               disabled={selectedAssets.length === 0}
               onPress={() => changeStep('review')}
@@ -591,7 +579,7 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
         ) : (
           <FlatList
             data={filteredCompanies}
-            keyExtractor={(item) => item.symbol}
+            keyExtractor={(item, index) => `${item.symbol}-${index}`}
             renderItem={({ item }) => (
               <SP500CompanyCard
                 company={item}
@@ -639,19 +627,6 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
           </View>
           
           <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.modernRefreshButton}
-              onPress={refreshAllPrices}
-              disabled={isCreating || selectedAssets.length === 0}
-            >
-              <Ionicons 
-                name={isCreating ? "sync" : "refresh"} 
-                size={16} 
-                color="#6366f1" 
-                style={isCreating ? styles.rotating : undefined}
-              />
-              <Text style={styles.modernRefreshText}>Refresh</Text>
-            </TouchableOpacity>
             
             <TouchableOpacity
               style={[
@@ -1304,24 +1279,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
   },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    minWidth: 120,
-    justifyContent: 'center',
-  },
-  refreshButtonText: {
-    color: '#3b82f6',
-    marginLeft: 4,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
   headerButtons: {
     flexDirection: 'column',
     alignItems: 'flex-end',
@@ -1489,16 +1447,7 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
-  refreshPricesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-  },
+
   
   // Modern Review Page Styles
   reviewContainer: {
@@ -1546,24 +1495,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  modernRefreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  modernRefreshText: {
-    color: '#6366f1',
-    fontWeight: '600',
-    fontSize: 13,
-    marginLeft: 4,
-  },
+
   modernCreateButton: {
     flexDirection: 'row',
     alignItems: 'center',

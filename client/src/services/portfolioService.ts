@@ -27,6 +27,18 @@ export interface Portfolio {
   };
 }
 
+export interface ProposedChange {
+  symbol: string;
+  action: 'buy' | 'sell' | 'hold';
+  quantityDelta: number; // positive to buy, negative to sell
+  reason?: string;
+}
+
+export interface ProposedPortfolioUpdate {
+  updatedPortfolio: Portfolio;
+  changes: ProposedChange[];
+}
+
 export interface PortfolioSummary {
   id: string;
   name: string;
@@ -288,7 +300,13 @@ const initializePortfolios = async (): Promise<void> => {
     const existingPortfolios = await AsyncStorage.getItem(STORAGE_KEY);
     
     if (!existingPortfolios) {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_PORTFOLIOS));
+      // Seed with samples but always assign fresh UUIDs for portfolio and asset IDs
+      const seeded: Portfolio[] = SAMPLE_PORTFOLIOS.map(sample => ({
+        ...sample,
+        id: uuidv4(),
+        assets: sample.assets.map(a => ({ ...a, id: uuidv4() }))
+      }));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     }
   } catch (error) {
     console.error('Error initializing portfolios:', error);
@@ -470,6 +488,138 @@ const updatePortfolio = async (portfolio: Portfolio): Promise<Portfolio> => {
 };
 
 /**
+ * Suggest trimming positions to reduce concentration above a max weight threshold
+ */
+export const suggestTrimConcentration = (
+  portfolio: Portfolio,
+  options: { maxWeight?: number; trimFraction?: number } = {}
+): ProposedPortfolioUpdate => {
+  const maxWeight = options.maxWeight ?? 0.15; // 15%
+  const trimFraction = options.trimFraction ?? 0.25; // trim 25% of overweight slice
+
+  const totalValue = portfolio.assets.reduce((s, a) => s + a.price * a.quantity, 0) || 1;
+  const changes: ProposedChange[] = [];
+
+  const updatedAssets = portfolio.assets.map(asset => {
+    const value = asset.price * asset.quantity;
+    const weight = value / totalValue;
+    if (weight > maxWeight) {
+      const overweightPortion = weight - maxWeight;
+      const targetReduceValue = overweightPortion * totalValue * trimFraction;
+      const quantityToSell = Math.max(0, targetReduceValue / asset.price);
+      if (quantityToSell > 0) {
+        changes.push({
+          symbol: asset.symbol,
+          action: 'sell',
+          quantityDelta: -quantityToSell,
+          reason: `Trim to reduce concentration from ${(weight * 100).toFixed(1)}%`
+        });
+        return { ...asset, quantity: Math.max(0, asset.quantity - quantityToSell) };
+      }
+    }
+    return asset;
+  });
+
+  const updatedPortfolio: Portfolio = {
+    ...portfolio,
+    assets: updatedAssets,
+    updatedAt: new Date().toISOString()
+  };
+
+  return { updatedPortfolio, changes };
+};
+
+/**
+ * Suggest adding a simple hedge (e.g., TLT for rates risk or GLD for commodities)
+ */
+export const suggestAddHedge = (
+  portfolio: Portfolio,
+  options: { symbol?: string; hedgeWeight?: number } = {}
+): ProposedPortfolioUpdate => {
+  const symbol = options.symbol ?? 'TLT';
+  const hedgeWeight = options.hedgeWeight ?? 0.05; // 5% of portfolio value
+
+  const totalValue = portfolio.assets.reduce((s, a) => s + a.price * a.quantity, 0) || 0;
+  const hedgeValue = totalValue * hedgeWeight;
+
+  // If hedge already exists, add to it; else create a new asset with placeholder price
+  const existing = portfolio.assets.find(a => a.symbol === symbol);
+  const price = existing?.price ?? 100;
+  const quantityToBuy = price > 0 ? hedgeValue / price : 0;
+
+  const changes: ProposedChange[] = [];
+  let updatedAssets: Asset[];
+  if (existing) {
+    updatedAssets = portfolio.assets.map(a => a.symbol === symbol ? { ...a, quantity: a.quantity + quantityToBuy } : a);
+  } else {
+    updatedAssets = [
+      ...portfolio.assets,
+      {
+        id: uuidv4(),
+        symbol,
+        name: symbol,
+        quantity: quantityToBuy,
+        price,
+        assetClass: 'bond'
+      }
+    ];
+  }
+
+  changes.push({ symbol, action: 'buy', quantityDelta: quantityToBuy, reason: `Add ~${(hedgeWeight * 100).toFixed(0)}% hedge` });
+
+  const updatedPortfolio: Portfolio = { ...portfolio, assets: updatedAssets, updatedAt: new Date().toISOString() };
+  return { updatedPortfolio, changes };
+};
+
+/**
+ * Import a portfolio from CSV text.
+ * CSV headers: symbol,quantity[,price]
+ */
+export const importPortfolioFromCSV = async (csvText: string, portfolioName: string): Promise<Portfolio> => {
+  const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) throw new Error('Empty CSV');
+  const [header, ...rows] = lines;
+  const headers = header.toLowerCase().split(',').map(h => h.trim());
+  const symbolIdx = headers.indexOf('symbol');
+  const qtyIdx = headers.indexOf('quantity');
+  const priceIdx = headers.indexOf('price');
+  if (symbolIdx < 0 || qtyIdx < 0) throw new Error('CSV must include symbol and quantity columns');
+
+  const assets: Asset[] = rows.map((row, i) => {
+    const cols = row.split(',');
+    const symbol = (cols[symbolIdx] || '').trim().toUpperCase();
+    const quantity = parseFloat((cols[qtyIdx] || '0').trim());
+    const price = priceIdx >= 0 ? parseFloat((cols[priceIdx] || '0').trim()) : 0;
+    if (!symbol || !isFinite(quantity) || quantity <= 0) {
+      throw new Error(`Invalid row ${i + 2}: ${row}`);
+    }
+    return {
+      id: uuidv4(),
+      symbol,
+      name: symbol,
+      quantity,
+      price: isFinite(price) && price > 0 ? price : 0,
+      assetClass: 'equity'
+    };
+  });
+
+  const portfolio: Portfolio = {
+    id: uuidv4(),
+    name: portfolioName || 'Imported Portfolio',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    assets
+  };
+
+  // Try to enrich prices
+  const withPrices = await updatePortfolioWithRealPrices(portfolio);
+
+  const portfolios = await getPortfolios();
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...portfolios, withPrices]));
+  return withPrices;
+};
+
+/**
  * Delete a portfolio
  */
 const deletePortfolio = async (id: string): Promise<void> => {
@@ -565,15 +715,17 @@ const refreshAllPortfolios = async (): Promise<void> => {
  */
 const migratePortfolioIds = async (): Promise<void> => {
   try {
-    console.log('Migrating portfolio IDs from timestamps to UUIDs...');
-    
-    // Clear existing portfolios that might have timestamp IDs
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    
-    // Reinitialize with proper UUID-based portfolios
-    await initializePortfolios();
-    
-    console.log('Portfolio ID migration completed successfully');
+    const portfoliosJson = await AsyncStorage.getItem(STORAGE_KEY);
+    const portfolios: Portfolio[] = portfoliosJson ? JSON.parse(portfoliosJson) : [];
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    const hasInvalid = portfolios.some(p => !uuidRegex.test(p.id));
+    if (hasInvalid) {
+      console.log('Fixing invalid portfolio IDs → reinitializing with UUIDs');
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      await initializePortfolios();
+      console.log('Portfolio ID migration completed successfully');
+    }
   } catch (error) {
     console.error('Error during portfolio ID migration:', error);
   }

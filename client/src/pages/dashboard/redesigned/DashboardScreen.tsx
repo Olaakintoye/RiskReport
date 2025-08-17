@@ -949,7 +949,7 @@ export default function DashboardScreen() {
                   styles.gaugeProgress,
                   { 
                     width: `${riskBudgetUsage * 100}%`,
-                    backgroundColor: riskBudgetUsage > 0.8 ? '#FF3B30' : riskBudgetUsage > 0.6 ? '#FF9500' : '#007AFF' 
+                    backgroundColor: '#000000' // Changed to black
                   }
                 ]} 
               />
@@ -1000,8 +1000,7 @@ export default function DashboardScreen() {
                           styles.riskBarFill,
                           { 
                             width: `${Math.min((risk.value / risk.limit) * 100, 100)}%`,
-                            backgroundColor: risk.value > risk.limit * 0.8 ? '#FF3B30' : 
-                                           risk.value > risk.limit * 0.6 ? '#FF9500' : '#007AFF'
+                            backgroundColor: '#000000' // Changed to black
                           }
                         ]} 
                       />

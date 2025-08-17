@@ -42,10 +42,11 @@ import BenchmarkCard from './components/BenchmarkCard';
 import PositionRiskCard from './components/PositionRiskCard';
 import MetricsCard from './components/MetricsCard';
 import ExportToolsCard from './components/ExportToolsCard';
+import BacktestCard from './components/BacktestCard';
 import RiskTracker from './components/RiskTracker';
 
 // Constants
-const API_URL = 'http://localhost:3001';
+import API_BASE from '../../../config/api';
 const DEFAULT_VAR_PARAMS: VaRParams = { 
   confidenceLevel: 0.95, 
   timeHorizon: 1, 
@@ -367,6 +368,15 @@ const RiskReportScreen: React.FC = () => {
     } catch (error) {
       console.error('Error loading last VaR analysis:', error);
       setHasLoadedLastAnalysis(false);
+      // Show a friendly message for brand-new portfolios or invalid IDs
+      const errMsg = (error as any)?.message || '';
+      if (errMsg.includes('invalid input syntax for type uuid') || errMsg.includes('Invalid portfolio ID')) {
+        Alert.alert(
+          'No Previous Analysis',
+          'This portfolio has no previous analysis yet. Run an analysis to generate initial results.',
+          [{ text: 'Run Analysis', onPress: () => setVarModalVisible(true) }, { text: 'OK' }]
+        );
+      }
     }
   };
 
@@ -587,6 +597,9 @@ const RiskReportScreen: React.FC = () => {
       return;
     }
     
+    // We're running a fresh analysis; ensure UI does not treat this as a "previous analysis" state
+    setHasLoadedLastAnalysis(false);
+
     // Store original portfolio value to maintain consistency
     const originalPortfolioValue = selectedPortfolio.assets.reduce(
       (sum, asset) => sum + asset.price * asset.quantity, 
@@ -633,7 +646,7 @@ const RiskReportScreen: React.FC = () => {
             }
           };
           
-          console.log(`Sending request to ${API_URL}/api/run-var for method: ${method}`);
+            console.log(`Sending request to ${API_BASE}/api/run-var for method: ${method}`);
           
           // Set timeout to 45 seconds for Python computation
           const axiosConfig = {
@@ -642,7 +655,7 @@ const RiskReportScreen: React.FC = () => {
           };
           
           // Make API call to the server to run Python VaR analysis
-          const response = await axios.post(`${API_URL}/api/run-var`, requestData, axiosConfig);
+          const response = await axios.post(`${API_BASE}/api/run-var`, requestData, axiosConfig);
           
           console.log(`Response received for ${method}:`, response.status);
           
@@ -653,21 +666,16 @@ const RiskReportScreen: React.FC = () => {
             console.log('Confidence level:', confidenceLevel, 'Type:', typeof confidenceLevel);
             
             // Process server results
+            // Server JSON uses numeric keys for var_results; also returns top-level var/cvar and percentages
             const confidenceKey = confidenceLevel.toString();
+            const vr = response.data.results?.var_results || {};
+            const vrForKey = vr[confidenceKey] || vr[String(parseFloat(confidenceKey))] || vr[parseFloat(confidenceKey)] || {};
             const pythonResults: VaRResults = {
               portfolioValue: originalPortfolioValue, // Use stored original value
-              varValue: response.data.results.var || 
-                        (response.data.results.var_results && 
-                         response.data.results.var_results[confidenceKey]?.var) || 0,
-              varPercentage: response.data.results.varPercentage || 
-                            (response.data.results.var_results && 
-                             response.data.results.var_results[confidenceKey]?.var_pct) || 0,
-              cvarValue: response.data.results.cvar || 
-                        (response.data.results.var_results && 
-                         response.data.results.var_results[confidenceKey]?.cvar) || 0,
-              cvarPercentage: response.data.results.cvarPercentage || 
-                             (response.data.results.var_results && 
-                              response.data.results.var_results[confidenceKey]?.cvar_pct) || 0,
+              varValue: Number(response.data.results?.var ?? vrForKey.var ?? 0),
+              varPercentage: Number(response.data.results?.varPercentage ?? vrForKey.var_pct ?? 0),
+              cvarValue: Number(response.data.results?.cvar ?? vrForKey.cvar ?? 0),
+              cvarPercentage: Number(response.data.results?.cvarPercentage ?? vrForKey.cvar_pct ?? 0),
               chartImageUrl: response.data.chartUrl || undefined,
               parameters: {
                 confidenceLevel: confidenceLevel.toString(),
@@ -724,7 +732,7 @@ const RiskReportScreen: React.FC = () => {
       if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       // Show success message
-      Alert.alert('Analysis Complete', 'All three VaR models have been calculated using portfolio data from the Python backend', [{ text: 'OK' }]);
+      Alert.alert('Analysis Complete', '', [{ text: 'OK' }]);
       
       // Force chart refresh to show the latest generated chart
       setChartRefreshTrigger(Date.now());
@@ -737,15 +745,19 @@ const RiskReportScreen: React.FC = () => {
       
       if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       
-      // Show specific error message and suggest retrying
-      Alert.alert(
-        'VaR Analysis Failed', 
-        `Error: ${error.message}\n\nPlease check that the backend server is running and try again.`, 
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Retry', onPress: () => runPythonVarAnalysis(confidenceLevel, timeHorizon, numSimulations, lookbackPeriod) }
-        ]
-      );
+      // Map common network errors to user-friendly guidance
+      let message = `Error: ${error.message}`;
+      if (error.message?.includes('Network Error')) {
+        message = 'Network error: Unable to reach the VaR server. Ensure your device and the server are on the same network and the API is running.';
+      } else if (error.response?.status >= 500) {
+        message = 'Server error: The VaR server encountered an issue. Please try again shortly.';
+      } else if (error.code === 'ECONNABORTED') {
+        message = 'Timeout: The analysis took too long. Try again with fewer simulations or check server load.';
+      }
+      Alert.alert('VaR Analysis Failed', message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Retry', onPress: () => runPythonVarAnalysis(confidenceLevel, timeHorizon, numSimulations, lookbackPeriod) }
+      ]);
     } finally {
       setRunningPythonAnalysis(false);
     }
@@ -787,7 +799,7 @@ const RiskReportScreen: React.FC = () => {
                      setActiveVarChart={setActiveVarChart} 
                      detailed={true}
                      lookbackPeriod={lookbackPeriod}
-                     apiUrl={API_URL}
+                     apiUrl={API_BASE}
                      forceRefresh={chartRefreshTrigger}
                      onRunAnalysis={() => setVarModalVisible(true)}
                      runningPythonAnalysis={runningPythonAnalysis} />,
@@ -888,7 +900,7 @@ const RiskReportScreen: React.FC = () => {
           monteCarloVaR={varResults.monteCarlo}
           activeVarChart={activeVarChart}
           setActiveVarChart={setActiveVarChart}
-          apiUrl={API_URL}
+          apiUrl={API_BASE}
           forceRefresh={chartRefreshTrigger}
           onRunAnalysis={() => setVarModalVisible(true)}
           runningPythonAnalysis={runningPythonAnalysis}
@@ -901,6 +913,16 @@ const RiskReportScreen: React.FC = () => {
           portfolioId={selectedPortfolioSummary?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'}
           onViewMore={() => handleShowDetailView('positionRisk')}
           onDrillDown={(symbol) => Alert.alert(`Position Details: ${symbol}`, `Detailed risk analysis for ${symbol} will be displayed here.`)}
+          overallVarPercentage={
+            activeVarChart === 'parametric' ? varResults.parametric?.varPercentage :
+            activeVarChart === 'historical' ? varResults.historical?.varPercentage :
+            activeVarChart === 'montecarlo' ? varResults.monteCarlo?.varPercentage : undefined
+          }
+          overallVarValue={
+            activeVarChart === 'parametric' ? varResults.parametric?.varValue :
+            activeVarChart === 'historical' ? varResults.historical?.varValue :
+            activeVarChart === 'montecarlo' ? varResults.monteCarlo?.varValue : undefined
+          }
         />
 
         {/* Risk Tracking Graph Section */}
@@ -918,6 +940,9 @@ const RiskReportScreen: React.FC = () => {
           portfolioValue={selectedPortfolioSummary?.totalValue || 0}
           onViewMore={() => handleShowDetailView('riskTracker')}
         />
+
+        {/* Backtesting (before Benchmark Comparison) */}
+        <BacktestCard portfolio={selectedPortfolio} />
 
         {/* Benchmark Comparison */}
         <BenchmarkCard
