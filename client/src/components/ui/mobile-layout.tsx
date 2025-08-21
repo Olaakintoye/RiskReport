@@ -35,85 +35,90 @@ export default function MobileLayout({ children, currentPath }: MobileLayoutProp
       </div>
 
       {/* Bottom Navigation Bar - Fixed */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-neutral-200 py-2 px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
-        <div className="flex justify-between items-center">
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-300 px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10 h-[60px] flex items-center">
+        <div className="flex justify-between items-center w-full">
           <Link href="/">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/") ? "cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-tachometer-alt text-lg transition-transform",
-                isActive("/") ? "text-primary scale-110" : "text-neutral-400"
+                isActive("/") ? "fas fa-home" : "far fa-home",
+                "text-lg transition-transform",
+                isActive("/") ? "text-black" : "text-gray-600"
               )}></i>
               <span className={cn(
-                "text-xs mt-1",
-                isActive("/") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Dashboard</span>
+                "text-xs mb-1",
+                isActive("/") ? "text-black font-medium" : "text-gray-600"
+              )}>Home</span>
             </a>
           </Link>
           
-          <Link href="/marketplace">
+          <Link href="/portfolio">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/marketplace") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/portfolio") ? "cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-certificate text-lg transition-transform",
-                isActive("/marketplace") ? "text-primary scale-110" : "text-neutral-400"
+                isActive("/portfolio") ? "fas fa-project-diagram" : "far fa-project-diagram",
+                "text-lg transition-transform",
+                isActive("/portfolio") ? "text-black" : "text-gray-600"
               )}></i>
               <span className={cn(
-                "text-xs mt-1",
-                isActive("/marketplace") ? "text-primary font-medium" : "text-neutral-400"
-              )}>CDs</span>
+                "text-xs mb-1",
+                isActive("/portfolio") ? "text-black font-medium" : "text-gray-600"
+              )}>Portfolio</span>
             </a>
           </Link>
           
-          <Link href="/rank">
+          <Link href="/risk">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/rank") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/risk") ? "cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-trophy text-lg transition-transform",
-                isActive("/rank") ? "text-primary scale-110" : "text-neutral-400"
+                isActive("/risk") ? "fas fa-plus-circle" : "fas fa-plus",
+                "text-lg transition-transform",
+                isActive("/risk") ? "text-black" : "text-gray-600"
               )}></i>
               <span className={cn(
-                "text-xs mt-1",
-                isActive("/rank") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Rankings</span>
+                "text-xs mb-1",
+                isActive("/risk") ? "text-black font-medium" : "text-gray-600"
+              )}>Risk</span>
             </a>
           </Link>
           
-          <Link href="/var">
+          <Link href="/stress-test">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/var") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/stress-test") ? "cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-chart-line text-lg transition-transform",
-                isActive("/var") ? "text-primary scale-110" : "text-neutral-400"
+                isActive("/stress-test") ? "fas fa-heartbeat" : "far fa-heartbeat",
+                "text-lg transition-transform",
+                isActive("/stress-test") ? "text-black" : "text-gray-600"
               )}></i>
               <span className={cn(
-                "text-xs mt-1",
-                isActive("/var") ? "text-primary font-medium" : "text-neutral-400"
-              )}>VAR</span>
+                "text-xs mb-1",
+                isActive("/stress-test") ? "text-black font-medium" : "text-gray-600"
+              )}>Stress Test</span>
             </a>
           </Link>
           
-          <Link href="/account">
+          <Link href="/profile">
             <a className={cn(
               "py-2 px-3 flex flex-col items-center relative rounded-lg transition-all duration-200",
-              isActive("/account") ? "bg-primary/10 cursor-default" : "hover:bg-neutral-100"
+              isActive("/profile") ? "cursor-default" : "hover:bg-neutral-100"
             )}>
               <i className={cn(
-                "fas fa-user-circle text-lg transition-transform",
-                isActive("/account") ? "text-primary scale-110" : "text-neutral-400"
+                isActive("/profile") ? "fas fa-user" : "far fa-user",
+                "text-lg transition-transform",
+                isActive("/profile") ? "text-black" : "text-gray-600"
               )}></i>
               <span className={cn(
-                "text-xs mt-1",
-                isActive("/account") ? "text-primary font-medium" : "text-neutral-400"
-              )}>Account</span>
+                "text-xs mb-1",
+                isActive("/profile") ? "text-black font-medium" : "text-gray-600"
+              )}>Profile</span>
             </a>
           </Link>
         </div>

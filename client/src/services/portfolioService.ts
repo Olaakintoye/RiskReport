@@ -664,6 +664,22 @@ export const getAllPortfolios = async (): Promise<{ id: string; name: string; to
 };
 
 /**
+ * Get full portfolios with refreshed prices (including assets)
+ */
+export const getPortfoliosWithPrices = async (): Promise<Portfolio[]> => {
+  try {
+    const portfolios = await getPortfolios();
+    const updated = await Promise.all(portfolios.map(p => updatePortfolioWithRealPrices(p)));
+    // Persist the refreshed set for consistency with other getters
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (error) {
+    console.error('Error getting portfolios with prices:', error);
+    return [];
+  }
+};
+
+/**
  * Refresh portfolio prices by clearing the cache and fetching new data
  */
 const refreshPortfolioPrices = async (portfolio: Portfolio): Promise<Portfolio> => {
@@ -745,6 +761,7 @@ export default {
   updatePortfolio,
   deletePortfolio,
   getAllPortfolios,
+  getPortfoliosWithPrices,
   refreshPortfolioPrices,
   refreshAllPortfolios,
   updatePortfolioRiskProfile,

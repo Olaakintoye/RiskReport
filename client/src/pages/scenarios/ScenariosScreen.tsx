@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  FlatList,
   Image,
   ActivityIndicator,
   Alert,
@@ -30,7 +29,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import { Swipeable } from 'react-native-gesture-handler';
-import PagerView from 'react-native-pager-view';
+// Removed PagerView in favor of FlatList vertical scrolling
 
 // Import services
 import portfolioService, { Portfolio } from '../../services/portfolioService';
@@ -245,39 +244,12 @@ const ScenarioLibrary: React.FC<ScenarioLibraryProps> = ({
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = usePersistentState<string | null>('ScenarioLibrary', 'selectedCategoryId', null);
   const [scenarioMenuVisible, setScenarioMenuVisible] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = usePersistentState<number>('ScenarioLibrary', 'currentPage', 0);
-  const pagerRef = useRef<PagerView>(null);
   
   const filteredScenarios = selectedCategoryId
     ? scenarios.filter(s => s.category === selectedCategoryId)
     : scenarios;
   
-  // Group scenarios into pages of 6 (2x3 grid)
-  const scenariosPerPage = 6;
-  const totalPages = Math.ceil(filteredScenarios.length / scenariosPerPage);
-  const currentScenarios = filteredScenarios.slice(
-    currentPage * scenariosPerPage,
-    (currentPage + 1) * scenariosPerPage
-  );
-
-  // Restore the current page when component mounts or page changes
-  useEffect(() => {
-    if (pagerRef.current && currentPage >= 0 && currentPage < totalPages) {
-      pagerRef.current.setPage(currentPage);
-    }
-  }, [currentPage, totalPages]);
-  
-  const nextPage = () => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  const prevPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  // Flat, vertically scrollable list; no paging
   
 
   
@@ -300,7 +272,6 @@ const ScenarioLibrary: React.FC<ScenarioLibraryProps> = ({
           isSelected={selectedCategoryId === null}
           onPress={() => {
             setSelectedCategoryId(null);
-            setCurrentPage(0);
           }}
         />
         {categories.map(category => (
@@ -310,13 +281,12 @@ const ScenarioLibrary: React.FC<ScenarioLibraryProps> = ({
             isSelected={selectedCategoryId === category.id}
             onPress={() => {
               setSelectedCategoryId(category.id);
-              setCurrentPage(0);
             }}
           />
         ))}
       </ScrollView>
       
-      {/* Scenarios Grid with PagerView for swipe functionality */}
+      {/* Scenarios Grid - vertically scrollable with nested scrolling */}
       {/* Global backdrop for menu - positioned behind dropdown */}
       {scenarioMenuVisible && (
         <TouchableWithoutFeedback onPress={() => setScenarioMenuVisible(null)}>
@@ -325,131 +295,95 @@ const ScenarioLibrary: React.FC<ScenarioLibraryProps> = ({
       )}
       
       <View style={styles.scenariosGridContainer}>
-        <PagerView
-          ref={pagerRef}
-          style={styles.pagerView}
-          initialPage={0}
-          onPageSelected={(e) => setCurrentPage(e.nativeEvent.position)}
+        <ScrollView
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scenariosGrid}
         >
-          {Array.from({ length: totalPages }).map((_, pageIndex) => {
-            const pageScenarios = filteredScenarios.slice(
-              pageIndex * scenariosPerPage,
-              (pageIndex + 1) * scenariosPerPage
-            );
-            
-            return (
-              <View key={pageIndex.toString()} style={styles.scenariosGrid}>
-                {pageScenarios.map((scenario, index) => (
-                  <View key={scenario.id} style={styles.gridScenarioCard}>
-                    <TouchableOpacity
-                      style={styles.gridScenarioTouchable}
-                      onPress={() => onSelectScenario(scenario)}
-                    >
-                      <View style={styles.gridScenarioContent}>
-                        <Text style={styles.gridScenarioSymbol}>
-                          {createScenarioSymbol(scenario.name)}
-                        </Text>
-                        <Text style={styles.gridScenarioName}>{safeDisplayName(scenario.name, 'Unnamed Scenario')}</Text>
-                        <Text style={styles.gridScenarioType}>
-                          {safeTruncate(scenario.description, 50, '...', 'Stress Test Scenario')}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                    
-                    {/* Three dots menu */}
-                    <TouchableOpacity
-                      style={styles.gridScenarioMenuButton}
-                      onPress={() => setScenarioMenuVisible(scenario.id)}
-                    >
-                      <MaterialCommunityIcons name="dots-vertical" size={16} color="#94a3b8" />
-                    </TouchableOpacity>
-                    
-                    {/* Dropdown menu */}
-                    {scenarioMenuVisible === scenario.id && (
-                      <View style={
-                        pageScenarios.length <= 4 || index < pageScenarios.length - 2 ? 
-                          (index % 2 === 1 ? styles.gridScenarioMenuTopLeft : styles.gridScenarioMenuTopRight) :
-                          (index % 2 === 1 ? styles.gridScenarioMenuLeft : styles.gridScenarioMenu)
-                      }>
-                        <TouchableOpacity 
-                          style={styles.scenarioMenuItem}
-                          onPress={() => {
-                            setScenarioMenuVisible(null);
-                            Alert.alert(
-                              'Categorize Scenario',
-                              'Select a category:',
-                              [
-                                {text: 'Cancel', style: 'cancel'},
-                                ...categories.map(category => ({
-                                  text: category.name,
-                                  onPress: () => onCategorize(scenario.id, category.id)
-                                }))
-                              ]
-                            );
-                          }}
-                        >
-                          <MaterialCommunityIcons name="tag" size={16} color="#334155" />
-                          <Text style={styles.scenarioMenuItemText}>Categorize</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={styles.scenarioMenuItem}
-                          onPress={() => {
-                            setScenarioMenuVisible(null);
-                            onCloneScenario(scenario);
-                          }}
-                        >
-                          <MaterialCommunityIcons name="content-copy" size={16} color="#334155" />
-                          <Text style={styles.scenarioMenuItemText}>Clone</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={styles.scenarioMenuItem}
-                          onPress={() => {
-                            setScenarioMenuVisible(null);
-                            Alert.alert(
-                              'Delete Scenario',
-                              `Are you sure you want to delete "${safeDisplayName(scenario.name, 'this scenario')}"? This cannot be undone.`,
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                { 
-                                  text: 'Delete', 
-                                  style: 'destructive',
-                                  onPress: () => onDeleteScenario(scenario.id)
-                                }
-                              ]
-                            );
-                          }}
-                        >
-                          <MaterialCommunityIcons name="delete" size={16} color="#ef4444" />
-                          <Text style={[styles.scenarioMenuItemText, {color: '#ef4444'}]}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                ))}
+          {filteredScenarios.map((scenario, index) => (
+            <TouchableOpacity
+              key={scenario.id}
+              style={styles.gridScenarioCard}
+              activeOpacity={0.8}
+              onPress={() => onSelectScenario(scenario)}
+            >
+              <View style={styles.gridScenarioTouchable}>
+                <View style={styles.gridScenarioContent}>
+                  <Text style={styles.gridScenarioSymbol}>
+                    {createScenarioSymbol(scenario.name)}
+                  </Text>
+                  <Text style={styles.gridScenarioName}>{safeDisplayName(scenario.name, 'Unnamed Scenario')}</Text>
+                  <Text style={styles.gridScenarioType}>
+                    {safeTruncate(scenario.description, 50, '...', 'Stress Test Scenario')}
+                  </Text>
+                </View>
               </View>
-            );
-          })}
-        </PagerView>
-        
-        {/* Page indicators - matches LiveMarketIndicators */}
-        {totalPages > 1 && (
-          <View style={styles.pageIndicators}>
-            <View style={styles.indicatorContainer}>
-              {Array.from({ length: totalPages }).map((_, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.pageIndicator,
-                    index === currentPage && styles.activePageIndicator
-                  ]}
-                  onPress={() => pagerRef.current?.setPage(index)}
-                />
-              ))}
-            </View>
-            <Text style={styles.pageText}>Traditional Markets</Text>
-          </View>
-        )}
 
+              <TouchableOpacity
+                style={styles.gridScenarioMenuButton}
+                onPress={() => setScenarioMenuVisible(scenario.id)}
+              >
+                <MaterialCommunityIcons name="dots-vertical" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+
+              {scenarioMenuVisible === scenario.id && (
+                <View style={index % 2 === 1 ? styles.gridScenarioMenuLeft : styles.gridScenarioMenu}>
+                  <TouchableOpacity 
+                    style={styles.scenarioMenuItem}
+                    onPress={() => {
+                      setScenarioMenuVisible(null);
+                      Alert.alert(
+                        'Categorize Scenario',
+                        'Select a category:',
+                        [
+                          {text: 'Cancel', style: 'cancel'},
+                          ...categories.map(category => ({
+                            text: category.name,
+                            onPress: () => onCategorize(scenario.id, category.id)
+                          }))
+                        ]
+                      );
+                    }}
+                  >
+                    <MaterialCommunityIcons name="tag" size={16} color="#334155" />
+                    <Text style={styles.scenarioMenuItemText}>Categorize</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.scenarioMenuItem}
+                    onPress={() => {
+                      setScenarioMenuVisible(null);
+                      onCloneScenario(scenario);
+                    }}
+                  >
+                    <MaterialCommunityIcons name="content-copy" size={16} color="#334155" />
+                    <Text style={styles.scenarioMenuItemText}>Clone</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.scenarioMenuItem}
+                    onPress={() => {
+                      setScenarioMenuVisible(null);
+                      Alert.alert(
+                        'Delete Scenario',
+                        `Are you sure you want to delete "${safeDisplayName(scenario.name, 'this scenario')}"? This cannot be undone.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Delete', 
+                            style: 'destructive',
+                            onPress: () => onDeleteScenario(scenario.id)
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <MaterialCommunityIcons name="delete" size={16} color="#ef4444" />
+                    <Text style={[styles.scenarioMenuItemText, {color: '#ef4444'}]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
       
       <TouchableOpacity 
@@ -2366,7 +2300,7 @@ const ScenariosScreen: React.FC = () => {
         </View>
       </View>
       
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} nestedScrollEnabled>
         <View style={styles.section}>
           <SectionHeader 
             title="Scenario Library"
@@ -3651,21 +3585,15 @@ const styles = StyleSheet.create({
   },
   scenariosGridContainer: {
     marginBottom: 16,
-    paddingBottom: 40,
+    paddingBottom: 16,
     overflow: 'visible',
-  },
-  pagerView: {
-    height: 450,
-    marginBottom: 8,
-    overflow: 'visible',
+    maxHeight: undefined,
   },
   scenariosGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
-    paddingVertical: 20,
-    paddingBottom: 80,
-    height: 420,
+    paddingVertical: 12,
     gap: 12,
   },
   gridScenarioCard: {

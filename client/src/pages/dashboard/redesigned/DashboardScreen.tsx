@@ -23,7 +23,8 @@ import { useAuth } from '../../../hooks/use-auth';
 import { usePersistentState } from '../../../hooks/use-screen-state';
 
 // Import services
-import { getAllPortfolios } from '../../../services/portfolioService';
+import { getAllPortfolios, getPortfoliosWithPrices } from '../../../services/portfolioService';
+import allocationService from '../../../services/allocationService';
 import { calculatePortfolioRisk, getRiskBreakdown } from '../../../services/riskService';
 import scenarioService from '../../../services/scenarioService';
 import { getSecurityPrice } from '../../../services/marketDataService';
@@ -126,6 +127,8 @@ export default function DashboardScreen() {
   const [scenarioDetailsVisible, setScenarioDetailsVisible] = useState(false);
   const [selectedScenarioRun, setSelectedScenarioRun] = useState<ScenarioRunData | null>(null);
   const [scrollPosition, setScrollPosition] = usePersistentState<number>('DashboardScreen', 'scrollPosition', 0);
+  const [popoverVisible, setPopoverVisible] = useState(false);
+  const [popoverContent, setPopoverContent] = useState<{ title: string; contributions: { portfolioName: string; value: number }[] } | null>(null);
   
   // Correlation Grid Enhanced State
   const [correlationTimePeriod, setCorrelationTimePeriod] = usePersistentState<'1M' | '3M' | '6M' | '1Y' | '3Y'>('DashboardScreen', 'correlationTimePeriod', '1Y');
@@ -139,6 +142,7 @@ export default function DashboardScreen() {
   
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
+  const popoverAnchorRef = useRef<View | null>(null);
   
   // Animations
   const scrollY = new Animated.Value(0);
@@ -188,9 +192,12 @@ export default function DashboardScreen() {
     try {
       setIsLoading(true);
       
-      // Load portfolio data
+      // Load portfolio summaries for top-level cards
       const portfolioData = await getAllPortfolios();
       setPortfolios(portfolioData.slice(0, 3)); // Top 3 portfolios
+
+      // Load full portfolios with assets for allocation calculations
+      const fullPortfolios = await getPortfoliosWithPrices();
       
       // Calculate risk metrics for each portfolio
       const riskMetrics: RiskMetric[] = [];
@@ -228,14 +235,17 @@ export default function DashboardScreen() {
       setRecentScenarios(scenarioResults.slice(0, 3)); // Top 3 recent scenarios
       
       // Load additional dashboard data
+      const contributionPromise = allocationService.computeContributionBreakdown(fullPortfolios as any);
       await Promise.all([
         loadPerformanceData(portfolioData),
-        loadAssetAllocation(portfolioData),
-        loadGeographicAllocation(portfolioData),
-        loadMarketCapAllocation(portfolioData),
+        loadAssetAllocation(fullPortfolios as any),
+        loadGeographicAllocation(fullPortfolios as any),
+        loadMarketCapAllocation(fullPortfolios as any),
         loadRiskInsights(portfolioData, riskMetrics),
         loadCorrelationData(portfolioData) // Load correlation data
       ]);
+      const contributions = await contributionPromise;
+      setContributionData(contributions);
       
       setIsLoading(false);
       setRefreshing(false);
@@ -244,6 +254,16 @@ export default function DashboardScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
+  };
+  const [contributionData, setContributionData] = useState<{ 
+    sectors: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
+    regions: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
+    marketCaps: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
+  } | null>(null);
+
+  const openContributionPopover = (title: string, items: { portfolioName: string; value: number }[]) => {
+    setPopoverContent({ title, contributions: items });
+    setPopoverVisible(true);
   };
 
   // Load performance data
@@ -279,35 +299,11 @@ export default function DashboardScreen() {
   // Load asset allocation
   const loadAssetAllocation = async (portfolioData: Portfolio[]) => {
     try {
-      const sectorMap: Record<string, { value: number; color: string }> = {};
-      let totalValue = 0;
-      
-      // Aggregate across all portfolios
-      for (const portfolio of portfolioData) {
-        totalValue += portfolio.totalValue;
-        
-        // Mock sector allocation - in real app, would come from portfolio assets
-        const mockSectors = getMockSectorAllocation(portfolio.totalValue);
-        mockSectors.forEach(sector => {
-          if (sectorMap[sector.name]) {
-            sectorMap[sector.name].value += sector.value;
-          } else {
-            sectorMap[sector.name] = { value: sector.value, color: sector.color };
-          }
-        });
-      }
-      
-      const allocation: AssetAllocation[] = Object.entries(sectorMap).map(([sector, data]) => ({
-        sector,
-        percentage: (data.value / totalValue) * 100,
-        value: data.value,
-        color: data.color
-      }));
-      
-      // Sort by percentage descending
-      allocation.sort((a, b) => b.percentage - a.percentage);
-      
-      setAssetAllocation(allocation.slice(0, 6)); // Top 6 sectors
+      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
+      const sectors = allAgg.sectors
+        .map(s => ({ sector: s.name, percentage: s.percentage, value: s.value, color: s.color }))
+        .sort((a, b) => b.percentage - a.percentage);
+      setAssetAllocation(sectors.slice(0, 6));
     } catch (error) {
       console.error('Error loading asset allocation:', error);
       setAssetAllocation([]);
@@ -317,35 +313,11 @@ export default function DashboardScreen() {
   // Load geographic allocation
   const loadGeographicAllocation = async (portfolioData: Portfolio[]) => {
     try {
-      const regionMap: Record<string, { value: number; color: string }> = {};
-      let totalValue = 0;
-      
-      // Aggregate across all portfolios
-      for (const portfolio of portfolioData) {
-        totalValue += portfolio.totalValue;
-        
-        // Mock geographic allocation - in real app, would come from portfolio assets
-        const mockRegions = getMockGeographicAllocation(portfolio.totalValue);
-        mockRegions.forEach(region => {
-          if (regionMap[region.name]) {
-            regionMap[region.name].value += region.value;
-          } else {
-            regionMap[region.name] = { value: region.value, color: region.color };
-          }
-        });
-      }
-      
-      const allocation: GeographicAllocation[] = Object.entries(regionMap).map(([region, data]) => ({
-        region,
-        percentage: (data.value / totalValue) * 100,
-        value: data.value,
-        color: data.color
-      }));
-      
-      // Sort by percentage descending
-      allocation.sort((a, b) => b.percentage - a.percentage);
-      
-      setGeographicAllocation(allocation); // All regions
+      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
+      const regions = allAgg.regions
+        .map(r => ({ region: r.name, percentage: r.percentage, value: r.value, color: r.color }))
+        .sort((a, b) => b.percentage - a.percentage);
+      setGeographicAllocation(regions);
     } catch (error) {
       console.error('Error loading geographic allocation:', error);
       setGeographicAllocation([]);
@@ -355,35 +327,11 @@ export default function DashboardScreen() {
   // Load market cap allocation
   const loadMarketCapAllocation = async (portfolioData: Portfolio[]) => {
     try {
-      const marketCapMap: Record<string, { value: number; color: string }> = {};
-      let totalValue = 0;
-      
-      // Aggregate across all portfolios
-      for (const portfolio of portfolioData) {
-        totalValue += portfolio.totalValue;
-        
-        // Mock market cap allocation - in real app, would come from portfolio assets
-        const mockMarketCaps = getMockMarketCapAllocation(portfolio.totalValue);
-        mockMarketCaps.forEach(marketCap => {
-          if (marketCapMap[marketCap.name]) {
-            marketCapMap[marketCap.name].value += marketCap.value;
-          } else {
-            marketCapMap[marketCap.name] = { value: marketCap.value, color: marketCap.color };
-          }
-        });
-      }
-      
-      const allocation: MarketCapAllocation[] = Object.entries(marketCapMap).map(([marketCap, data]) => ({
-        marketCap,
-        percentage: (data.value / totalValue) * 100,
-        value: data.value,
-        color: data.color
-      }));
-      
-      // Sort by percentage descending
-      allocation.sort((a, b) => b.percentage - a.percentage);
-      
-      setMarketCapAllocation(allocation); // All market caps
+      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
+      const caps = allAgg.marketCaps
+        .map(m => ({ marketCap: m.name, percentage: m.percentage, value: m.value, color: m.color }))
+        .sort((a, b) => b.percentage - a.percentage);
+      setMarketCapAllocation(caps);
     } catch (error) {
       console.error('Error loading market cap allocation:', error);
       setMarketCapAllocation([]);
@@ -925,6 +873,24 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.headerTitle}>Risk Dashboard</Text>
           </View>
+          {popoverContent && popoverVisible && (
+            <Modal transparent visible={popoverVisible} animationType="fade" onRequestClose={() => setPopoverVisible(false)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, width: '90%', maxWidth: 360 }}>
+                  <Text style={{ fontWeight: '600', fontSize: 16, marginBottom: 8 }}>{popoverContent.title} — Top Contributors</Text>
+                  {popoverContent.contributions.map((c, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 6 }}>
+                      <Text style={{ color: '#334155' }}>{c.portfolioName}</Text>
+                      <Text style={{ color: '#334155' }}>${Math.round(c.value).toLocaleString()}</Text>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={{ marginTop: 12, alignSelf: 'flex-end' }} onPress={() => setPopoverVisible(false)}>
+                    <Text style={{ color: '#3b82f6', fontWeight: '600' }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
+          )}
         </View>
 
         {/* Live Market Indicators */}
@@ -1161,6 +1127,12 @@ export default function DashboardScreen() {
                     <View 
                       key={allocation.sector} 
                       style={[styles.allocationItem, index < assetAllocation.length - 1 && styles.allocationItemBorder]}
+                      onStartShouldSetResponder={() => true}
+                      onResponderGrant={() => {
+                        if (!contributionData) return;
+                        const list = (contributionData.sectors[allocation.sector] || []).slice(0, 5);
+                        openContributionPopover(allocation.sector, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                      }}
                     >
                       <View style={styles.allocationInfo}>
                         <View style={[styles.allocationColorDot, { backgroundColor: allocation.color }]} />
@@ -1181,6 +1153,12 @@ export default function DashboardScreen() {
                     <View 
                       key={allocation.region} 
                       style={[styles.allocationItem, index < geographicAllocation.length - 1 && styles.allocationItemBorder]}
+                      onStartShouldSetResponder={() => true}
+                      onResponderGrant={() => {
+                        if (!contributionData) return;
+                        const list = (contributionData.regions[allocation.region] || []).slice(0, 5);
+                        openContributionPopover(allocation.region, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                      }}
                     >
                       <View style={styles.allocationInfo}>
                         <View style={[styles.allocationColorDot, { backgroundColor: allocation.color }]} />
@@ -1201,6 +1179,12 @@ export default function DashboardScreen() {
                     <View 
                       key={allocation.marketCap} 
                       style={[styles.allocationItem, index < marketCapAllocation.length - 1 && styles.allocationItemBorder]}
+                      onStartShouldSetResponder={() => true}
+                      onResponderGrant={() => {
+                        if (!contributionData) return;
+                        const list = (contributionData.marketCaps[allocation.marketCap] || []).slice(0, 5);
+                        openContributionPopover(allocation.marketCap, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                      }}
                     >
                       <View style={styles.allocationInfo}>
                         <View style={[styles.allocationColorDot, { backgroundColor: allocation.color }]} />

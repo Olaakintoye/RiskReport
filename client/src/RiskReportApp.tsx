@@ -15,6 +15,9 @@ import { DashboardScreen } from './pages/dashboard/redesigned';
 // Import navigators
 import SettingsNavigator from './SettingsNavigator';
 
+// Import custom components
+import { CustomTabBar } from './components/ui/CustomTabBar';
+
 // Import services
 import { initializeAllServices } from './services/initServices';
 import { useState } from 'react';
@@ -78,61 +81,16 @@ export default function RiskReportApp() {
         <ScreenStateProvider>
           <NavigationContainer>
             <Tab.Navigator
-            screenOptions={({ route }) => ({
-              tabBarIcon: ({ focused, color, size }) => {
-                let iconName;
-
-                switch (route.name) {
-                  case 'Dashboard':
-                    iconName = focused ? 'view-dashboard' : 'view-dashboard-outline';
-                    return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
-                  case 'Portfolio':
-                    return <Ionicons name="pie-chart-outline" size={size} color={color} />;
-                  case 'Risk Report':
-                    iconName = focused ? 'chart-line' : 'chart-line-variant';
-                    return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
-                  case 'Scenarios':
-                    iconName = focused ? 'test-tube' : 'test-tube-empty';
-                    return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
-                  case 'Settings':
-                    iconName = focused ? 'cog' : 'cog-outline';
-                    return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
-                  default:
-                    iconName = 'help-circle-outline';
-                    return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
-                }
-              },
-              tabBarActiveTintColor: '#007AFF',
-              tabBarInactiveTintColor: '#8E8E93',
+            tabBar={(props) => <CustomTabBar {...props} />}
+            screenOptions={{
               headerShown: false,
-              tabBarStyle: {
-                backgroundColor: '#FFFFFF',
-                borderTopWidth: 1,
-                borderTopColor: 'rgba(0,0,0,0.1)',
-                elevation: 8,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                height: 84,
-                paddingBottom: 20,
-                paddingTop: 8,
-              },
-              tabBarLabelStyle: {
-                fontSize: 12,
-                fontWeight: '500',
-                marginTop: 4,
-              },
-              tabBarIconStyle: {
-                marginTop: 4,
-              },
-            })}
+            }}
           >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} />
+            <Tab.Screen name="Home" component={DashboardScreen} />
             <Tab.Screen name="Portfolio" component={PortfolioScreen} />
-            <Tab.Screen name="Risk Report" component={RiskReportScreen} />
-            <Tab.Screen name="Scenarios" component={ScenariosScreen} />
-            <Tab.Screen name="Settings" component={SettingsNavigator} />
+            <Tab.Screen name="Risk" component={RiskReportScreen} />
+            <Tab.Screen name="Stress Test" component={ScenariosScreen} />
+            <Tab.Screen name="Profile" component={SettingsNavigator} />
           </Tab.Navigator>
         </NavigationContainer>
         </ScreenStateProvider>

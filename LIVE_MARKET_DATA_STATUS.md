@@ -125,3 +125,4 @@ The live market data system is now **fully functional** with:
 
 The system should now display live market data in the dashboard with realistic price movements every 30 seconds, providing users with an engaging real-time market experience.
 
+

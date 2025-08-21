@@ -158,3 +158,4 @@ The live market data system has been **completely transformed**:
 
 **Users will now see actual live market prices that match real trading platforms, not simulated data!**
 
+
