@@ -10,7 +10,8 @@
     "node_modules/**/*",
     "build",
     "dist",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "node_modules/react-native-maps/**/*"
   ],
   "compilerOptions": {
     "incremental": true,
@@ -26,6 +27,7 @@
     "jsx": "react-native",
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
     "baseUrl": ".",

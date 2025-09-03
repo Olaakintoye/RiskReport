@@ -87,15 +87,7 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
     loadCompanyData();
   }, [symbol]);
 
-  // Auto-refresh price data every 5 minutes
-  useAutoRefresh({
-    interval: 5 * 60 * 1000, // 5 minutes
-    enabled: !!company,
-    onRefresh: refreshPrice,
-    respectMarketHours: true
-  });
-
-  // Function to refresh real-time price (now for auto-refresh)
+  // Function to refresh real-time price (for auto-refresh)
   const refreshPrice = async () => {
     if (!company) return;
     
@@ -119,6 +111,14 @@ const SP500CompanyDetail: React.FC<SP500CompanyDetailProps> = ({
       // Silent fail for auto-refresh to avoid interrupting user
     }
   };
+
+  // Auto-refresh price data every 5 minutes
+  useAutoRefresh({
+    interval: 5 * 60 * 1000, // 5 minutes
+    enabled: !!company,
+    onRefresh: refreshPrice,
+    respectMarketHours: true
+  });
 
   const updateTotalValue = (price: number, qty: number) => {
     setTotalValue(price * qty);

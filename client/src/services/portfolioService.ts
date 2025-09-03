@@ -750,6 +750,71 @@ const migratePortfolioIds = async (): Promise<void> => {
 // Initialize with sample data
 initializePortfolios();
 
+/**
+ * Import portfolio from CSV content
+ */
+const importPortfolioFromCSV = async (csvContent: string, portfolioName: string): Promise<Portfolio> => {
+  try {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) {
+      throw new Error('CSV file must contain at least a header row and one data row');
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const assets: Asset[] = [];
+
+    // Expected CSV format: symbol, name, quantity, price, assetClass
+    const symbolIndex = headers.indexOf('symbol');
+    const nameIndex = headers.indexOf('name');
+    const quantityIndex = headers.indexOf('quantity');
+    const priceIndex = headers.indexOf('price');
+    const assetClassIndex = headers.indexOf('assetclass') || headers.indexOf('asset_class');
+
+    if (symbolIndex === -1 || quantityIndex === -1) {
+      throw new Error('CSV must contain at least symbol and quantity columns');
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      
+      if (values.length < headers.length) continue;
+
+      const symbol = values[symbolIndex];
+      const quantity = parseFloat(values[quantityIndex]);
+      
+      if (!symbol || isNaN(quantity) || quantity <= 0) continue;
+
+      const asset: Asset = {
+        id: uuidv4(),
+        symbol: symbol.toUpperCase(),
+        name: nameIndex !== -1 ? values[nameIndex] : symbol,
+        quantity,
+        price: priceIndex !== -1 ? parseFloat(values[priceIndex]) || 0 : 0,
+        assetClass: assetClassIndex !== -1 ? 
+          (values[assetClassIndex] as Asset['assetClass']) || 'equity' : 'equity'
+      };
+
+      assets.push(asset);
+    }
+
+    if (assets.length === 0) {
+      throw new Error('No valid assets found in CSV file');
+    }
+
+    // Create the portfolio
+    const portfolio = await createPortfolio({
+      name: portfolioName,
+      description: `Imported from CSV with ${assets.length} assets`,
+      assets
+    });
+
+    return portfolio;
+  } catch (error) {
+    console.error('Error importing portfolio from CSV:', error);
+    throw error;
+  }
+};
+
 // Run migration on app start to fix any existing timestamp-based IDs
 migratePortfolioIds();
 
@@ -765,5 +830,6 @@ export default {
   refreshPortfolioPrices,
   refreshAllPortfolios,
   updatePortfolioRiskProfile,
-  getPortfolioVaRLimit
+  getPortfolioVaRLimit,
+  importPortfolioFromCSV
 }; 

@@ -539,6 +539,50 @@ export interface Database {
           updated_at?: string
         }
       }
+      investments: {
+        Row: {
+          id: string
+          user_id: string
+          bank_name: string
+          amount: number
+          interest_rate: number
+          term_months: number
+          start_date: string
+          maturity_date: string
+          status: string
+          interest_earned: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          bank_name: string
+          amount: number
+          interest_rate: number
+          term_months: number
+          start_date: string
+          maturity_date: string
+          status?: string
+          interest_earned?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          bank_name?: string
+          amount?: number
+          interest_rate?: number
+          term_months?: number
+          start_date?: string
+          maturity_date?: string
+          status?: string
+          interest_earned?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -549,6 +593,25 @@ export interface Database {
           portfolio_uuid: string
         }
         Returns: number
+      }
+      get_user_display_name: {
+        Args: {
+          user_id: string
+        }
+        Returns: string
+      }
+      validate_username: {
+        Args: {
+          new_username: string
+          user_id: string
+        }
+        Returns: boolean
+      }
+      update_username: {
+        Args: {
+          new_username: string
+        }
+        Returns: void
       }
     }
     Enums: {

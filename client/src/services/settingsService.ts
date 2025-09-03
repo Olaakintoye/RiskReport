@@ -115,7 +115,7 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
 
 export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   darkMode: false,
-  language: Localization.locale,
+  language: Localization.getLocales()[0]?.languageTag || 'en-US',
   currency: 'USD',
   dateFormat: 'MM/DD/YYYY',
   numberFormat: 'en-US',

@@ -206,7 +206,7 @@ export class MemStorage implements IStorage {
     const newInvestment: Investment = { 
       ...investment, 
       id, 
-      interestEarned: 0,
+      interestEarned: "0",
       status: 'active'
     };
     this.investments.set(id, newInvestment);
@@ -310,7 +310,7 @@ export class MemStorage implements IStorage {
     if (userInvestments.length === 0) {
       return {
         totalInvested: 0,
-        interestEarned: 0,
+        interestEarned: "0",
         avgApy: 0,
         projectedAnnualEarnings: 0
       };
@@ -364,42 +364,42 @@ export class MemStorage implements IStorage {
       const bankData: InsertBank[] = [
         { 
           name: 'First National Bank', 
-          rating: 4.75, 
+          rating: '4.75', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'primary' 
         },
         { 
           name: 'Coastal Credit Union', 
-          rating: 4.0, 
+          rating: '4.0', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'secondary' 
         },
         { 
           name: 'Capital One', 
-          rating: 4.8, 
+          rating: '4.8', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'primary' 
         },
         { 
           name: 'Ally Bank', 
-          rating: 4.5, 
+          rating: '4.5', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'primary' 
         },
         { 
           name: 'Synchrony', 
-          rating: 4.0, 
+          rating: '4.0', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'secondary' 
         },
         { 
           name: 'Marcus by Goldman', 
-          rating: 4.8, 
+          rating: '4.8', 
           fdic_insured: true, 
           logo_type: 'landmark', 
           color: 'accent' 
@@ -415,8 +415,8 @@ export class MemStorage implements IStorage {
               bankId: banks[0].id, // First National Bank
               name: '12-Month Fixed CD',
               termMonths: 12,
-              apy: 4.75,
-              minimumDeposit: 1000,
+              apy: '4.75',
+              minimumDeposit: '1000',
               earlyWithdrawalPenalty: 'Penalty',
               description: 'A 12-month certificate of deposit with a competitive rate',
               isFeatured: false
@@ -425,8 +425,8 @@ export class MemStorage implements IStorage {
               bankId: banks[1].id, // Coastal Credit Union
               name: '6-Month CD',
               termMonths: 6,
-              apy: 4.25,
-              minimumDeposit: 500,
+              apy: '4.25',
+              minimumDeposit: '500',
               earlyWithdrawalPenalty: 'Penalty',
               description: 'A short-term CD with good returns',
               isFeatured: false
@@ -435,8 +435,8 @@ export class MemStorage implements IStorage {
               bankId: banks[2].id, // Capital One
               name: '12 Month CD Special',
               termMonths: 12,
-              apy: 5.00,
-              minimumDeposit: 500,
+              apy: '5.00',
+              minimumDeposit: '500',
               earlyWithdrawalPenalty: 'Penalty',
               description: 'Our best rate CD with flexible terms',
               isFeatured: true
@@ -445,8 +445,8 @@ export class MemStorage implements IStorage {
               bankId: banks[3].id, // Ally Bank
               name: '18-Month CD',
               termMonths: 18,
-              apy: 4.85,
-              minimumDeposit: 0,
+              apy: '4.85',
+              minimumDeposit: '0',
               earlyWithdrawalPenalty: 'Penalty',
               description: 'No minimum deposit required',
               isFeatured: false
@@ -455,8 +455,8 @@ export class MemStorage implements IStorage {
               bankId: banks[4].id, // Synchrony
               name: '24-Month CD',
               termMonths: 24,
-              apy: 4.75,
-              minimumDeposit: 2000,
+              apy: '4.75',
+              minimumDeposit: '2000',
               earlyWithdrawalPenalty: 'Penalty',
               description: 'Long-term savings with competitive rates',
               isFeatured: false
@@ -465,8 +465,8 @@ export class MemStorage implements IStorage {
               bankId: banks[5].id, // Marcus by Goldman
               name: '12-Month CD',
               termMonths: 12,
-              apy: 4.50,
-              minimumDeposit: 500,
+              apy: '4.50',
+              minimumDeposit: '500',
               earlyWithdrawalPenalty: 'Flexible',
               description: 'Flexible withdrawal options available',
               isFeatured: false
@@ -475,8 +475,8 @@ export class MemStorage implements IStorage {
               bankId: banks[5].id, // Marcus by Goldman
               name: '18-Month CD',
               termMonths: 18,
-              apy: 4.50,
-              minimumDeposit: 500,
+              apy: '4.50',
+              minimumDeposit: '500',
               earlyWithdrawalPenalty: 'Flexible',
               description: 'Extended savings with competitive rates',
               isFeatured: false
@@ -496,7 +496,7 @@ export class MemStorage implements IStorage {
           const investment1: InsertInvestment = {
             userId: createdUser.id,
             cdProductId: cdProducts[0].id,
-            amount: 10000,
+            amount: '10000',
             startDate: firstStartDate,
             maturityDate: firstMaturity
           };
@@ -508,7 +508,7 @@ export class MemStorage implements IStorage {
           const investment2: InsertInvestment = {
             userId: createdUser.id,
             cdProductId: cdProducts[1].id,
-            amount: 15000,
+            amount: '15000',
             startDate: secondStartDate,
             maturityDate: secondMaturity
           };
@@ -520,7 +520,7 @@ export class MemStorage implements IStorage {
           const investment3: InsertInvestment = {
             userId: createdUser.id,
             cdProductId: cdProducts[6].id,
-            amount: 12250,
+            amount: '12250',
             startDate: thirdStartDate,
             maturityDate: thirdMaturity
           };
@@ -533,51 +533,51 @@ export class MemStorage implements IStorage {
         })
         .then(investments => {
           // Update investments with some earned interest
-          this.updateInvestment(investments[0].id, { interestEarned: 118.75 });
-          this.updateInvestment(investments[1].id, { interestEarned: 265.63 });
-          this.updateInvestment(investments[2].id, { interestEarned: 45.94 });
+          this.updateInvestment(investments[0].id, { interestEarned: "118.75" });
+          this.updateInvestment(investments[1].id, { interestEarned: "265.63" });
+          this.updateInvestment(investments[2].id, { interestEarned: "45.94" });
           
           // Create transactions for the user
           const transactions: InsertTransaction[] = [
             {
               userId: createdUser.id,
               type: 'deposit',
-              amount: 10000,
+              amount: '10000',
               description: 'Initial deposit for First National Bank CD',
               relatedInvestmentId: investments[0].id
             },
             {
               userId: createdUser.id,
               type: 'deposit',
-              amount: 15000,
+              amount: '15000',
               description: 'Initial deposit for Coastal Credit Union CD',
               relatedInvestmentId: investments[1].id
             },
             {
               userId: createdUser.id,
               type: 'interest',
-              amount: 118.75,
+              amount: '118.75',
               description: 'Interest accrual for First National Bank CD',
               relatedInvestmentId: investments[0].id
             },
             {
               userId: createdUser.id,
               type: 'deposit',
-              amount: 12250,
+              amount: '12250',
               description: 'Initial deposit for Marcus by Goldman CD',
               relatedInvestmentId: investments[2].id
             },
             {
               userId: createdUser.id,
               type: 'interest',
-              amount: 265.63,
+              amount: '265.63',
               description: 'Interest accrual for Coastal Credit Union CD',
               relatedInvestmentId: investments[1].id
             },
             {
               userId: createdUser.id,
               type: 'interest',
-              amount: 45.94,
+              amount: '45.94',
               description: 'Interest accrual for Marcus by Goldman CD',
               relatedInvestmentId: investments[2].id
             }
@@ -800,7 +800,7 @@ export class SupabaseStorage implements IStorage {
     if (userInvestments.length === 0) {
       return {
         totalInvested: 0,
-        interestEarned: 0,
+        interestEarned: "0",
         avgApy: 0,
         projectedAnnualEarnings: 0
       };

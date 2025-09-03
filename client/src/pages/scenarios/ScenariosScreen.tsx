@@ -13,6 +13,7 @@ import {
   TextInput,
   Platform,
   TouchableWithoutFeedback,
+  FlatList,
   StatusBar
 } from 'react-native';
 import StressTestResultsPopup from '../../components/stress-test/StressTestResultsPopup';
@@ -528,8 +529,8 @@ const HistoricalEventsOverlay: React.FC<{
           
           <FlatList
             data={overlays}
-            keyExtractor={(item) => item.event.id}
-            renderItem={({ item }) => (
+            keyExtractor={(item: any) => item.event.id}
+            renderItem={({ item }: { item: any }) => (
               <View style={styles.eventRow}>
                 <View style={styles.eventInfo}>
                   <Text style={styles.eventName}>{item.event.name}</Text>
@@ -648,8 +649,8 @@ const HedgingSuggestions: React.FC<{
           
           <FlatList
             data={suggestions}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+            keyExtractor={(item: any) => item.id}
+            renderItem={({ item }: { item: any }) => (
               <HedgingSuggestionCard
                 suggestion={item}
                 onApply={onApply}
@@ -823,8 +824,8 @@ const BatchAnalysis: React.FC<BatchAnalysisProps> = ({
           
           <FlatList
             data={portfolios}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+            keyExtractor={(item: any) => item.id}
+            renderItem={({ item }: { item: any }) => (
               <TouchableOpacity
                 style={styles.portfolioCheckItem}
                 onPress={() => onTogglePortfolio(item.id)}
@@ -2261,7 +2262,7 @@ const ScenariosScreen: React.FC = () => {
         {/* Render StressTestResultsPopup with complete isolation */}
         {(() => {
           try {
-            if (showDetailedResults === true && React.isValidElement) {
+            if (showDetailedResults === true) {
               return (
                 <StressTestResultsPopup
                   visible={true}

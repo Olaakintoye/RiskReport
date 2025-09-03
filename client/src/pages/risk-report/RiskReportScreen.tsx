@@ -38,7 +38,7 @@ const DEFAULT_VAR_PARAMS: VaRParams = {
 
 // Update with your actual server IP address and port for mobile/simulator access
 // Example: const API_URL = 'http://192.168.1.100:3000';
-import API_BASE from '../config/api';
+import API_BASE from '../../config/api';
 const API_URL = API_BASE; // Use centralized API base
 
 // Add VarAnalysisModal component inline for now

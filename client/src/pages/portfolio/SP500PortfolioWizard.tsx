@@ -93,6 +93,85 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
     setFilteredCompanies(filtered);
   }, [selectedSector, searchQuery, companies]);
 
+  // Function to refresh all asset prices (for auto-refresh)
+  const refreshAllPrices = async () => {
+    if (selectedAssets.length === 0) return;
+    
+    try {
+      // Clear the Tiingo cache to force fresh data
+      tiingoService.clearCache();
+      
+      // Get all the tickers from the selected assets
+      const symbols = selectedAssets.map(asset => asset.symbol);
+      console.log('Auto-refreshing prices for:', symbols.join(', '));
+      
+      // Try to batch fetch real-time prices for all assets
+      const pricesData = await tiingoService.getBatchRealTimePrices(symbols);
+      
+      // Update asset prices with real-time data
+      const updatedAssets = selectedAssets.map(asset => {
+        const tickerData = pricesData[asset.symbol];
+        if (tickerData && (tickerData.tngoLast || tickerData.last)) {
+          // Use tngoLast if available, otherwise fallback to last
+          const realTimePrice = tickerData.tngoLast || tickerData.last;
+          console.log(`Auto-updated ${asset.symbol} price: $${realTimePrice}`);
+          return {
+            ...asset,
+            price: realTimePrice
+          };
+        }
+        // Keep original price if no real-time data available
+        console.log(`Keeping original price for ${asset.symbol}: $${asset.price}`);
+        return asset;
+      });
+      
+      // Update the selected assets with real-time prices
+      setSelectedAssets(updatedAssets);
+    } catch (error) {
+      console.error('Error auto-refreshing asset prices:', error);
+      // Don't show alert for auto-refresh failures to avoid interrupting user
+    }
+  };
+
+  // Function to refresh all visible company prices (for auto-refresh)
+  const refreshAllCompanyPrices = async () => {
+    if (filteredCompanies.length === 0) return;
+    
+    try {
+      // Clear the Tiingo cache to force fresh data
+      tiingoService.clearCache();
+      
+      // Get symbols for visible companies (limit to prevent overwhelming)
+      const symbols = filteredCompanies.slice(0, 50).map(company => company.symbol);
+      console.log('Auto-refreshing company prices for:', symbols.length, 'companies');
+      
+      // Try to batch fetch real-time prices for visible companies
+      const pricesData = await tiingoService.getBatchRealTimePrices(symbols);
+      
+      // Update company data with real-time prices
+      const updatedCompanies = companies.map(company => {
+        const tickerData = pricesData[company.symbol];
+        if (tickerData && (tickerData.tngoLast || tickerData.last)) {
+          // Use tngoLast if available, otherwise fallback to last
+          const realTimePrice = tickerData.tngoLast || tickerData.last;
+          console.log(`Auto-updated ${company.symbol} price: $${realTimePrice}`);
+          return {
+            ...company,
+            price: realTimePrice
+          };
+        }
+        // Keep original price if no real-time data available
+        return company;
+      });
+      
+      // Update companies state with real-time prices
+      setCompanies(updatedCompanies);
+    } catch (error) {
+      console.error('Error auto-refreshing company prices:', error);
+      // Don't show alert for auto-refresh failures to avoid interrupting user
+    }
+  };
+
   // Auto-refresh for company prices in select step (every 5 minutes)
   useAutoRefresh({
     interval: 5 * 60 * 1000, // 5 minutes
@@ -278,70 +357,7 @@ const SP500PortfolioWizard: React.FC<SP500PortfolioWizardProps> = ({ onBackToPor
     }
   };
 
-  // Function to refresh all asset prices (now for auto-refresh)
-  const refreshAllPrices = async () => {
-    if (selectedAssets.length === 0) return;
-    
-    try {
-      // Clear the Tiingo cache to force fresh data
-      tiingoService.clearCache();
-      
-      // Get all the tickers from the selected assets
-      const symbols = selectedAssets.map(asset => asset.symbol);
-      console.log('Auto-refreshing prices for:', symbols.join(', '));
-      
-      // Try to batch fetch real-time prices for all assets
-      const pricesData = await tiingoService.getBatchRealTimePrices(symbols);
-      
-      // Update asset prices with real-time data
-      const updatedAssets = selectedAssets.map(asset => {
-        const tickerData = pricesData[asset.symbol];
-        if (tickerData && (tickerData.tngoLast || tickerData.last)) {
-          // Use tngoLast if available, otherwise fallback to last
-          const realTimePrice = tickerData.tngoLast || tickerData.last;
-          console.log(`Auto-updated ${asset.symbol} price: $${realTimePrice}`);
-          return {
-            ...asset,
-            price: realTimePrice
-          };
-        }
-        // Keep original price if no real-time data available
-        console.log(`Keeping original price for ${asset.symbol}: $${asset.price}`);
-        return asset;
-      });
-      
-      // Update the selected assets with real-time prices
-      setSelectedAssets(updatedAssets);
-    } catch (error) {
-      console.error('Error auto-refreshing asset prices:', error);
-      // Don't show alert for auto-refresh failures to avoid interrupting user
-    }
-  };
 
-  // Function to refresh all visible company prices (now for auto-refresh)
-  const refreshAllCompanyPrices = async () => {
-    if (filteredCompanies.length === 0) return;
-    
-    try {
-      // Clear Tiingo cache to get fresh data
-      tiingoService.clearCache();
-      
-      // Get symbols for companies currently displayed
-      const symbols = filteredCompanies.slice(0, 25).map(company => company.symbol);
-      console.log(`Auto-refreshing prices for ${symbols.length} companies...`);
-      
-      // Batch request real-time prices
-      await tiingoService.getBatchRealTimePrices(symbols);
-      
-      // Force re-render of company cards
-      setFilteredCompanies([...filteredCompanies]);
-      
-      console.log(`Successfully auto-refreshed prices for ${symbols.length} companies`);
-    } catch (error) {
-      console.error('Error auto-refreshing company prices:', error);
-      // Don't show alert for auto-refresh failures
-    }
-  };
 
   // Enhance step changing with logging
   const changeStep = (newStep: 'info' | 'select' | 'review') => {

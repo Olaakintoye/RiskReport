@@ -65,7 +65,7 @@ app.use((req, res, next) => {
   }
 
   // Use PORT from environment variable or fallback to 3001
-  const port = process.env.PORT || 3001;
+  const port = parseInt(process.env.PORT || '3001', 10);
   const host = '0.0.0.0'; // Listen on all interfaces for mobile device access
   server.listen(port, host, () => {
     log(`serving on ${host}:${port}`);
