@@ -31,6 +31,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const apiRouter = express.Router();
   app.use("/api", apiRouter);
   
+  // API status endpoint
+  apiRouter.get("/status", (req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      message: 'VaR Analysis API is running',
+      endpoints: {
+        "POST /api/run-var": "Run VaR analysis",
+        "GET /api/status": "API health check"
+      }
+    });
+  });
+  
   // Stress Test API Routes
   app.use("/api/stress-test", stressTestRouter);
 
@@ -368,8 +381,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const path = require('path');
       const fs = require('fs');
       
-      const params = req.body;
-      console.log('Received VaR parameters:', params);
+      console.log('Received VaR request body:', req.body);
+      
+      // Extract parameters from the correct location (req.body.params)
+      const params = req.body.params || req.body;
+      const portfolio = req.body.portfolio;
+      
+      console.log('Extracted params:', params);
+      console.log('Extracted portfolio:', portfolio ? 'Yes' : 'No');
       
       // Extract parameters with default values for missing ones
       const confidenceLevel = params.confidenceLevels || params.confidenceLevel || '0.95'; 
@@ -380,6 +399,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lookbackPeriod = params.lookbackPeriod || 5;
       const varMethod = params.varMethod || 'monte-carlo';
       
+      // Calculate portfolio value from assets if provided
+      let portfolioValue = null;
+      if (portfolio && portfolio.assets && portfolio.assets.length > 0) {
+        portfolioValue = portfolio.assets.reduce(
+          (sum: number, asset: any) => sum + (asset.price * asset.quantity), 
+          0
+        );
+        console.log(`Calculated portfolio value from assets: $${portfolioValue.toFixed(2)}`);
+      }
+      
       console.log('Running VaR analysis with validated params:', {
         confidenceLevel,
         timeHorizon,
@@ -387,7 +416,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractSize,
         numContracts,
         lookbackPeriod,
-        varMethod
+        varMethod,
+        portfolioValue
       });
       
       // Path to Python script
@@ -396,6 +426,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Output file for the chart - make unique for each method
       const methodPrefix = varMethod.toLowerCase().replace(/[^a-z0-9]/g, '_');
       const outputFile = `${methodPrefix}_var_${Date.now()}.png`;
+      
+      // Prepare portfolio data file if needed
+      let portfolioDataPath = '';
+      if (portfolio && portfolio.assets && portfolio.assets.length > 0) {
+        portfolioDataPath = path.join(__dirname, `portfolio_${Date.now()}.json`);
+        require('fs').writeFileSync(portfolioDataPath, JSON.stringify(portfolio, null, 2));
+        console.log(`Created portfolio data file: ${portfolioDataPath}`);
+      }
       
       // Command-line arguments for the Python script, ensuring all are strings
       const args = [
@@ -408,6 +446,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         '--method', varMethod,
         '--lookback', String(lookbackPeriod)
       ];
+      
+      // Add portfolio data path if we have portfolio data
+      if (portfolioDataPath) {
+        args.push('--portfolio-data', portfolioDataPath);
+      }
+      
+      // Add portfolio value if calculated
+      if (portfolioValue !== null) {
+        args.push('--portfolio-value', String(portfolioValue));
+      }
       
       console.log(`Using ${lookbackPeriod} years of historical data for VaR calculation`);
       
@@ -425,6 +473,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timeout = setTimeout(() => {
         python.kill('SIGTERM');
         console.error('Python process timed out after 60 seconds');
+        
+        // Clean up portfolio data file if it exists
+        if (portfolioDataPath && fs.existsSync(portfolioDataPath)) {
+          try {
+            fs.unlinkSync(portfolioDataPath);
+            console.log(`Cleaned up portfolio data file: ${portfolioDataPath}`);
+          } catch (err) {
+            console.error(`Error cleaning up portfolio data file: ${err}`);
+          }
+        }
+        
         if (!res.headersSent) {
           res.status(408).json({ 
             error: 'VaR analysis timed out', 
@@ -457,6 +516,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (code !== 0) {
           console.error(`Python script exited with code ${code}`);
           console.error(`Error: ${errorString}`);
+          
+          // Clean up portfolio data file if it exists
+          if (portfolioDataPath && fs.existsSync(portfolioDataPath)) {
+            try {
+              fs.unlinkSync(portfolioDataPath);
+              console.log(`Cleaned up portfolio data file: ${portfolioDataPath}`);
+            } catch (err) {
+              console.error(`Error cleaning up portfolio data file: ${err}`);
+            }
+          }
+          
           return res.status(500).json({ 
             error: 'Error running VaR analysis', 
             details: errorString 
@@ -493,6 +563,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Copy JSON to public dir
             fs.copyFileSync(jsonOutputPath, path.join(publicDir, jsonOutputFile));
             fs.unlinkSync(jsonOutputPath); // Remove original
+            
+            // Clean up portfolio data file if it exists
+            if (portfolioDataPath && fs.existsSync(portfolioDataPath)) {
+              try {
+                fs.unlinkSync(portfolioDataPath);
+                console.log(`Cleaned up portfolio data file: ${portfolioDataPath}`);
+              } catch (err) {
+                console.error(`Error cleaning up portfolio data file: ${err}`);
+              }
+            }
             
             return res.json({
               success: true,
@@ -654,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Return the list of image files with full URLs, using request host
       const protocol = (req.headers['x-forwarded-proto'] as string) || 'http';
-      const host = req.headers.host || `localhost:3001`;
+      const host = req.headers.host || `localhost:3000`;
       const imageUrls = imageFiles.map(file => `${protocol}://${host}/${file}`);
       
       res.json({

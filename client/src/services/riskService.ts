@@ -527,7 +527,7 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ portfolio }),
-        signal: AbortSignal.timeout(45000), // 45 second timeout
+        signal: AbortSignal.timeout(70000), // 70 second timeout
       });
 
       if (response.ok) {

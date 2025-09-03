@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: '#e6f0ff', borderColor: '#bfdbfe' },
   pillText: { color: '#4b5563', textTransform: 'capitalize' },
   pillTextActive: { color: '#1e3a8a' },
-  runBtn: { backgroundColor: '#007AFF', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  runBtn: { backgroundColor: '#000000', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   runText: { color: '#fff', fontWeight: '600' },
   error: { color: '#ef4444', marginTop: 8 },
   results: { marginTop: 12 },

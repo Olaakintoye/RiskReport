@@ -289,9 +289,9 @@ export default function UnifiedDashboard() {
 
       {/* Recent Scenarios */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent Scenarios</Text>
+        <Text style={styles.sectionTitle}>Recent Stress Tests</Text>
         <TouchableOpacity onPress={navigateToScenarios} style={styles.seeAllButton}>
-          <Text style={styles.seeAllText}>Run more</Text>
+          <Text style={styles.seeAllText}>Run stress test</Text>
         </TouchableOpacity>
       </View>
 
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: 14,
-    color: '#10b981',
+    color: '#000000',
     fontWeight: '500',
   },
   portfolioCardsContainer: {

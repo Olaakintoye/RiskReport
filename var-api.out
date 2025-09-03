@@ -1,0 +1,39 @@
+VaR Analysis API running on http://0.0.0.0:3001
+Also accessible at http://localhost:3001 and http://192.168.1.106:3001
+Server started at 2025-09-02T15:43:59.268Z
+Available endpoints:
+  POST /api/run-var - Run VaR analysis
+  GET /api/stress-periods - Get stress periods
+  GET /api/latest-charts - Get latest charts
+Express error handler caught: SyntaxError: Expected property name or '}' in JSON at position 4 (line 2 column 3)
+    at JSON.parse (<anonymous>)
+    at parse (/Users/ola/Downloads/RiskReport.1/server/node_modules/body-parser/lib/types/json.js:92:19)
+    at /Users/ola/Downloads/RiskReport.1/server/node_modules/body-parser/lib/read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (/Users/ola/Downloads/RiskReport.1/server/node_modules/raw-body/index.js:238:16)
+    at done (/Users/ola/Downloads/RiskReport.1/server/node_modules/raw-body/index.js:227:7)
+    at IncomingMessage.onEnd (/Users/ola/Downloads/RiskReport.1/server/node_modules/raw-body/index.js:287:7)
+    at IncomingMessage.emit (node:events:507:28)
+    at endReadableNT (node:internal/streams/readable:1696:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  expose: true,
+  statusCode: 400,
+  status: 400,
+  body: '{\n' +
+    '  params: {\n' +
+    '    confidenceLevel: 0.95,\n' +
+    '    timeHorizon: 1,\n' +
+    '    numSimulations: 1000,\n' +
+    '    lookbackPeriod: 1,\n' +
+    '    varMethod: parametric,\n' +
+    '    skipChart: true\n' +
+    '  },\n' +
+    '  portfolio: {\n' +
+    '    name: Demo,\n' +
+    '    assets: [\n' +
+    '      {symbol: AAPL, name: Apple, quantity: 10, price: 175, assetClass: equity}\n' +
+    '    ]\n' +
+    '  }\n' +
+    '}\n',
+  type: 'entity.parse.failed'
+}

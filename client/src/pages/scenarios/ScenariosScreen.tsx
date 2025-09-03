@@ -257,7 +257,6 @@ const ScenarioLibrary: React.FC<ScenarioLibraryProps> = ({
     <View style={styles.libraryContainer}>
       {/* Header with title */}
       <View style={styles.libraryHeader}>
-        <Text style={styles.libraryTitle}>Scenario Library</Text>
       </View>
       
       {/* Category filters */}
@@ -2296,7 +2295,7 @@ const ScenariosScreen: React.FC = () => {
       {/* Header with matching Risk Report design */}
       <View style={styles.headerContainer}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.appTitle}>Scenarios</Text>
+          <Text style={styles.appTitle}>Stress Testing</Text>
         </View>
       </View>
       
@@ -2304,7 +2303,7 @@ const ScenariosScreen: React.FC = () => {
         <View style={styles.section}>
           <SectionHeader 
             title="Scenario Library"
-            subtitle="Market shock templates and custom scenarios"
+            subtitle="Choose from market shock templates or make and run custom scenarios"
           />
           
           <ScenarioLibrary
@@ -2680,7 +2679,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#000000',
     borderRadius: 8,
     padding: 12,
     marginTop: 8,

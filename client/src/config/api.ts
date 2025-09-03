@@ -11,7 +11,7 @@ function deriveFromDebuggerHost(): string | null {
       // host may be like "192.168.1.100:19000" or "localhost:19000"
       const ip = host.split(':')[0];
       if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-        return `http://${ip}:3001`;
+        return `http://${ip}:3000`;
       }
     }
   } catch {}
@@ -56,7 +56,7 @@ export const API_BASE: string =
   (envBase as string) ||
   (derivedBase as string) ||
   (extraBase as string) ||
-  (Platform.select({ web: 'http://localhost:3001', default: 'http://localhost:3001' }) as string);
+  (Platform.select({ web: 'http://localhost:3000', default: 'http://localhost:3000' }) as string);
 
 // Dedicated base for the Stress Test server (runs on port 3000)
 const envStressBase = process.env.EXPO_PUBLIC_STRESS_BASE || process.env.STRESS_BASE;

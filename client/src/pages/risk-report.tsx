@@ -277,7 +277,7 @@ export default function RiskReport() {
       
       // Make API call to our Express server with a timeout
       const response = await axios.post(`${API_URL}/api/run-var`, requestData, {
-        timeout: 45000, // 45 second timeout (should be enough for Python computation)
+        timeout: 70000, // 70 second timeout (longer than backend timeout)
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'

@@ -57,7 +57,7 @@
       "eas": {
         "projectId": "your-project-id"
       },
-      "apiBase": "http://192.168.1.106:3001",
+      "apiBase": "http://192.168.1.106:3000",
       "stressBase": "http://192.168.1.106:3000"
     }
   }

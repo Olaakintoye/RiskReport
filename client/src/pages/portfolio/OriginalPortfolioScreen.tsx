@@ -494,7 +494,7 @@ const OriginalPortfolioScreen: React.FC = () => {
             style={styles.createButton}
             onPress={handleCreatePortfolio}
           >
-            <Ionicons name="add-circle" size={24} color="#3b82f6" />
+            <Ionicons name="add-circle" size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </View>

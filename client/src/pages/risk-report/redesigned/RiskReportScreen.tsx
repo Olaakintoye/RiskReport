@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
+import http, { healthCheck, postWithRetry } from '../../../lib/http';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../../navigation-types';
 import { LineChart } from 'react-native-chart-kit';
@@ -297,7 +298,7 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
             <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, marginRight: 8 }} onPress={onClose}>
               <Text style={{ color: '#273c75', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={{ backgroundColor: '#273c75', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 }}
+            <TouchableOpacity style={{ backgroundColor: '#000000', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 }}
               onPress={() => onRun(confidence, horizon, Math.max(1, parseInt(simulations) || 10000), lookbackPeriod)}>
               <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Run Analysis</Text>
             </TouchableOpacity>
@@ -611,6 +612,17 @@ const RiskReportScreen: React.FC = () => {
     try {
       setRunningPythonAnalysis(true);
       console.log('Running Python VaR analysis for portfolio:', selectedPortfolio.name);
+      console.log('API Base URL:', API_BASE);
+      
+      // First, test server connectivity via shared client
+      console.log('🔍 Testing server connectivity...');
+      try {
+        const hc = await healthCheck(5000);
+        console.log('✅ Server health check passed:', hc.data?.status || 'ok');
+      } catch (healthError: any) {
+        console.error('❌ Server health check failed:', healthError.message);
+        throw new Error(`Server is not accessible at ${API_BASE}. Please check if the server is running.`);
+      }
       
       // Create an array of all methods to run
       const varMethods = ['parametric', 'historical', 'monte-carlo'];
@@ -647,36 +659,45 @@ const RiskReportScreen: React.FC = () => {
           };
           
             console.log(`Sending request to ${API_BASE}/api/run-var for method: ${method}`);
+            console.log('Request data:', JSON.stringify(requestData, null, 2));
           
-          // Set timeout to 45 seconds for Python computation
+          // Set timeout to 120 seconds for Python computation (generous for mobile networks)
           const axiosConfig = {
-            timeout: 45000, // 45 seconds timeout (should be enough for Python computation)
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+            timeout: 120000, // 120 seconds timeout (generous for mobile networks)
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            // Add retry and network resilience for mobile
+            validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+            maxRedirects: 3,
+            // Enable request body compression
+            decompress: true
           };
           
-          // Make API call to the server to run Python VaR analysis
-          const response = await axios.post(`${API_BASE}/api/run-var`, requestData, axiosConfig);
+          // Make API call using shared client with retry
+          const response = await postWithRetry<any>(`/api/run-var`, requestData, {
+            timeout: 120000,
+            retries: 2
+          });
           
-          console.log(`Response received for ${method}:`, response.status);
+          console.log(`Response received for ${method}:`, response?.success ? 200 : 'non-200');
           
-          if (response.data.success) {
+          if (response.success) {
             console.log(`Analysis successful for ${method}, processing results`);
-            console.log('Raw response data:', response.data);
-            console.log('Results data:', response.data.results);
+            console.log('Raw response data:', response);
+            console.log('Results data:', response.results);
             console.log('Confidence level:', confidenceLevel, 'Type:', typeof confidenceLevel);
             
             // Process server results
             // Server JSON uses numeric keys for var_results; also returns top-level var/cvar and percentages
             const confidenceKey = confidenceLevel.toString();
-            const vr = response.data.results?.var_results || {};
+            const vr = response.results?.var_results || {};
             const vrForKey = vr[confidenceKey] || vr[String(parseFloat(confidenceKey))] || vr[parseFloat(confidenceKey)] || {};
             const pythonResults: VaRResults = {
               portfolioValue: originalPortfolioValue, // Use stored original value
-              varValue: Number(response.data.results?.var ?? vrForKey.var ?? 0),
-              varPercentage: Number(response.data.results?.varPercentage ?? vrForKey.var_pct ?? 0),
-              cvarValue: Number(response.data.results?.cvar ?? vrForKey.cvar ?? 0),
-              cvarPercentage: Number(response.data.results?.cvarPercentage ?? vrForKey.cvar_pct ?? 0),
-              chartImageUrl: response.data.chartUrl || undefined,
+              varValue: Number(response.results?.var ?? vrForKey.var ?? 0),
+              varPercentage: Number(response.results?.varPercentage ?? vrForKey.var_pct ?? 0),
+              cvarValue: Number(response.results?.cvar ?? vrForKey.cvar ?? 0),
+              cvarPercentage: Number(response.results?.cvarPercentage ?? vrForKey.cvar_pct ?? 0),
+              chartImageUrl: response.chartUrl || undefined,
               parameters: {
                 confidenceLevel: confidenceLevel.toString(),
                 timeHorizon: timeHorizon,
@@ -688,9 +709,9 @@ const RiskReportScreen: React.FC = () => {
               },
               lastUpdated: new Date(),
               executionTime: {
-                start: response.data.startTime,
-                end: response.data.endTime,
-                duration: response.data.endTime - response.data.startTime
+                start: response.startTime || Date.now(),
+                end: response.endTime || Date.now(),
+                duration: (response.endTime || Date.now()) - (response.startTime || Date.now())
               }
             };
             
@@ -706,15 +727,28 @@ const RiskReportScreen: React.FC = () => {
             results[method] = pythonResults;
             anyServerSuccess = true;
           } else {
-            throw new Error(response.data.error || `Failed to run Python ${method} VaR analysis`);
+            throw new Error(response.error || `Failed to run Python ${method} VaR analysis`);
           }
         } catch (methodError: any) {
           console.error(`Error running Python ${method} VaR analysis:`, methodError);
           console.error('Method error details:', {
-            message: methodError.message,
-            response: methodError.response?.data,
-            status: methodError.response?.status
+            message: methodError?.message,
+            response: methodError?.response?.data,
+            status: methodError?.response?.status,
+            code: methodError?.code,
+            timeout: methodError?.code === 'ECONNABORTED' ? 'YES' : 'NO'
           });
+          
+          // If this is a timeout error, provide helpful debugging info
+          if (methodError.code === 'ECONNABORTED' && methodError.message.includes('timeout')) {
+            console.log(`⏰ TIMEOUT DETAILS for ${method}:`);
+            console.log(`- API Base: ${API_BASE}`);
+            console.log(`- Timeout setting: 120 seconds`);
+            console.log(`- Backend should complete in ~3 seconds`);
+            console.log(`- This suggests a network connectivity issue`);
+            console.log(`- Try: Check if server is running on port 3000`);
+            console.log(`- Try: Test API manually with: curl ${API_BASE}/api/status`);
+          }
           
           // Instead of fallback, show specific error for this method
           throw new Error(`Failed to run Python ${method} VaR analysis: ${methodError.message || 'Unknown error'}`);

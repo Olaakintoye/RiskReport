@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Import the main app with tab navigation
 import RiskReportApp from './client/src/RiskReportApp';
 import { ThemeProvider } from './client/src/lib/theme-provider';
+import API_BASE from './client/src/config/api';
 
 // Import onboarding and auth
 import OnboardingContainer from './client/src/components/onboarding/OnboardingContainer';
@@ -24,6 +25,11 @@ function AppContent() {
       setShowOnboarding(true);
     }
   }, [user]);
+
+  // Log resolved API base once on startup for debugging
+  useEffect(() => {
+    console.log('Resolved API_BASE (startup):', API_BASE);
+  }, []);
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);

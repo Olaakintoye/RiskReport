@@ -359,7 +359,7 @@ const EnhancedPortfolioScreen: React.FC = () => {
             style={styles.createButton}
             onPress={handleCreatePortfolio}
           >
-            <Ionicons name="add-circle" size={24} color="#3b82f6" />
+            <Ionicons name="add-circle" size={24} color="#ffffff" />
             <Text style={styles.createButtonText}>New</Text>
           </TouchableOpacity>
         </View>
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#000000',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,

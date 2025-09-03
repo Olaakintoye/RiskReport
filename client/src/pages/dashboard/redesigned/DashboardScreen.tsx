@@ -10,7 +10,8 @@ import {
   StatusBar,
   Platform,
   Modal,
-  Alert
+  Alert,
+  Pressable
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ import { calculatePortfolioRisk, getRiskBreakdown } from '../../../services/risk
 import scenarioService from '../../../services/scenarioService';
 import { getSecurityPrice } from '../../../services/marketDataService';
 import riskTrackingService from '../../../services/riskTrackingService';
+import yahooFinanceService from '../../../services/yahooFinanceService';
 
 // Import components
 import LiveMarketIndicators from '../../../components/ui/LiveMarketIndicators';
@@ -139,10 +141,14 @@ export default function DashboardScreen() {
   const [correlationTrendData, setCorrelationTrendData] = useState<Record<string, number[]>>({});
   const [correlationInfoModalVisible, setCorrelationInfoModalVisible] = useState(false);
   const navigation = useNavigation();
+  const [correlationMatrix, setCorrelationMatrix] = useState<number[][] | null>(null);
+  const [indexSparklineData, setIndexSparklineData] = useState<Record<string, number[]>>({});
   
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
   const popoverAnchorRef = useRef<View | null>(null);
+  const portfoliosRef = useRef<Portfolio[]>([]);
+  useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
   
   // Animations
   const scrollY = new Animated.Value(0);
@@ -194,7 +200,7 @@ export default function DashboardScreen() {
       
       // Load portfolio summaries for top-level cards
       const portfolioData = await getAllPortfolios();
-      setPortfolios(portfolioData.slice(0, 3)); // Top 3 portfolios
+      setPortfolios(portfolioData);
 
       // Load full portfolios with assets for allocation calculations
       const fullPortfolios = await getPortfoliosWithPrices();
@@ -271,7 +277,7 @@ export default function DashboardScreen() {
     try {
       const performanceResults: PerformanceData[] = [];
       
-      for (const portfolio of portfolioData.slice(0, 3)) {
+      for (const portfolio of portfolioData) {
         // In a real app, you'd fetch historical data
         // For now, we'll use mock data with some realistic variations
         const mockPreviousValue = portfolio.totalValue * (0.95 + Math.random() * 0.1);
@@ -399,6 +405,17 @@ export default function DashboardScreen() {
     if (portfolios.length > 0) {
       loadCorrelationData(portfolios);
     }
+  }, [correlationTimePeriod]);
+
+  // Live refresh for correlation data
+  useEffect(() => {
+    const tick = () => {
+      if (portfoliosRef.current.length > 0) {
+        loadCorrelationData(portfoliosRef.current);
+      }
+    };
+    const id = setInterval(tick, 300000);
+    return () => clearInterval(id);
   }, [correlationTimePeriod]);
 
   // Handle refresh
@@ -557,12 +574,12 @@ export default function DashboardScreen() {
   // Enhanced correlation matrix functions
   const getTopWorldIndices = () => {
     return [
-      { symbol: 'SPX', name: 'S&P 500', region: 'US' },
-      { symbol: 'FTSE', name: 'FTSE 100', region: 'UK' },
-      { symbol: 'N225', name: 'Nikkei 225', region: 'Japan' },
-      { symbol: 'DAX', name: 'DAX', region: 'Germany' },
-      { symbol: 'CAC', name: 'CAC 40', region: 'France' },
-      { symbol: 'HSI', name: 'Hang Seng', region: 'Hong Kong' }
+      { symbol: 'SPX', name: 'S&P 500', region: 'US', yahoo: '^GSPC' },
+      { symbol: 'FTSE', name: 'FTSE 100', region: 'UK', yahoo: '^FTSE' },
+      { symbol: 'N225', name: 'Nikkei 225', region: 'Japan', yahoo: '^N225' },
+      { symbol: 'DAX', name: 'DAX', region: 'Germany', yahoo: '^GDAXI' },
+      { symbol: 'CAC', name: 'CAC 40', region: 'France', yahoo: '^FCHI' },
+      { symbol: 'HSI', name: 'Hang Seng', region: 'Hong Kong', yahoo: '^HSI' }
     ];
   };
 
@@ -614,6 +631,9 @@ export default function DashboardScreen() {
   };
 
   const getCorrelationValue = (i: number, j: number): number => {
+    if (correlationMatrix && correlationMatrix[i] && typeof correlationMatrix[i][j] === 'number') {
+      return correlationMatrix[i][j];
+    }
     const matrix = getCorrelationMatrixByPeriod(correlationTimePeriod);
     return matrix[i][j];
   };
@@ -650,6 +670,52 @@ export default function DashboardScreen() {
     if (value >= -0.5) return 'Moderate negative correlation - these indices often move in opposite directions, providing diversification benefits.';
     if (value >= -0.7) return 'Strong negative correlation - these indices consistently move in opposite directions, excellent for diversification.';
     return 'Very strong negative correlation - these indices move almost perfectly in opposite directions, providing maximum diversification benefits.';
+  };
+
+  // Normalize timestamp to UTC date key (YYYY-MM-DD)
+  const toDateKey = (ts: number): string => {
+    try {
+      return new Date(ts).toISOString().slice(0, 10);
+    } catch {
+      return '';
+    }
+  };
+
+  // Map UI period to Yahoo API parameters
+  const mapPeriodToYahooParams = (period: '1M' | '3M' | '6M' | '1Y' | '3Y') => {
+    switch (period) {
+      case '1M':
+        return { range: '1mo' as const, interval: '1d' as const };
+      case '3M':
+        return { range: '3mo' as const, interval: '1d' as const };
+      case '6M':
+        return { range: '6mo' as const, interval: '1d' as const };
+      case '1Y':
+        return { range: '1y' as const, interval: '1d' as const };
+      case '3Y':
+      default:
+        return { range: '5y' as const, interval: '1wk' as const };
+    }
+  };
+
+  // Pearson correlation of two aligned return series
+  const pearson = (a: number[], b: number[]): number => {
+    const n = Math.min(a.length, b.length);
+    if (n < 2) return 0;
+    let sumA = 0, sumB = 0;
+    for (let i = 0; i < n; i++) { sumA += a[i]; sumB += b[i]; }
+    const meanA = sumA / n;
+    const meanB = sumB / n;
+    let num = 0, denA = 0, denB = 0;
+    for (let i = 0; i < n; i++) {
+      const da = a[i] - meanA;
+      const db = b[i] - meanB;
+      num += da * db;
+      denA += da * da;
+      denB += db * db;
+    }
+    if (denA === 0 || denB === 0) return 0;
+    return num / Math.sqrt(denA * denB);
   };
 
   // Calculate portfolio correlations with world indices
@@ -753,8 +819,6 @@ export default function DashboardScreen() {
       Haptics.selectionAsync();
     }
     setCorrelationTimePeriod(period);
-    // Reload correlation data with new period
-    loadCorrelationData(portfolios);
   };
 
   const closeCorrelationDetailModal = () => {
@@ -775,18 +839,22 @@ export default function DashboardScreen() {
 
   // Mini Chart Component
   const MiniChart = ({ data, width = 50, height = 20 }: { data: number[], width?: number, height?: number }) => {
-    if (!data || data.length === 0) return null;
-    
-    const maxValue = Math.max(...data);
-    const minValue = Math.min(...data);
+    let cleaned = (data || []).filter(n => Number.isFinite(n));
+    if (cleaned.length === 1) cleaned = [cleaned[0], cleaned[0]];
+    if (cleaned.length < 2) return null;
+
+    const maxValue = Math.max(...cleaned);
+    const minValue = Math.min(...cleaned);
     const range = maxValue - minValue;
-    
-    const pathData = data.map((value, index) => {
-      const x = (index / (data.length - 1)) * width;
-      const y = height - ((value - minValue) / range) * height;
+
+    const pathData = cleaned.map((value, index) => {
+      const x = (index / (cleaned.length - 1)) * width;
+      const y = range > 0
+        ? height - ((value - minValue) / range) * height
+        : height / 2; // flat line when no variance
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
     }).join(' ');
-    
+
     return (
       <Svg width={width} height={height} style={{ marginLeft: 8 }}>
         <Path
@@ -805,18 +873,116 @@ export default function DashboardScreen() {
       const portfolioCorr = await calculatePortfolioCorrelations(portfolioData);
       setPortfolioCorrelations(portfolioCorr);
       
-      const matrix = getCorrelationMatrixByPeriod(correlationTimePeriod);
+      const indices = getTopWorldIndices();
+      const { range, interval } = mapPeriodToYahooParams(correlationTimePeriod);
+
+      const seriesBySymbol: Record<string, { timestamp: number; adjustedClose: number }[]> = {};
+      await Promise.all(
+        indices.map(async ({ yahoo, symbol }) => {
+          const raw = await yahooFinanceService.getHistoricalData(yahoo, range, interval);
+          const threeYearsAgo = Date.now() - (3 * 365 * 24 * 60 * 60 * 1000);
+          const filtered = correlationTimePeriod === '3Y'
+            ? raw.filter((p: any) => p.timestamp >= threeYearsAgo)
+            : raw;
+          seriesBySymbol[symbol] = filtered
+            .filter((p: any) => typeof p.adjustedClose === 'number' && typeof p.timestamp === 'number')
+            .map((p: any) => ({ timestamp: p.timestamp, adjustedClose: p.adjustedClose }));
+        })
+      );
+
+      const symbolKeys = indices.map(i => i.symbol);
+      // Build date->close maps per symbol using UTC date keys (align differing timezones/calendars)
+      const dateToCloseBySymbol: Record<string, Map<string, number>> = {};
+      for (const sym of symbolKeys) {
+        const m = new Map<string, number>();
+        for (const p of seriesBySymbol[sym]) {
+          const k = toDateKey(p.timestamp);
+          if (k && Number.isFinite(p.adjustedClose)) m.set(k, p.adjustedClose);
+        }
+        dateToCloseBySymbol[sym] = m;
+      }
+
+      // Build union of date keys across all series (then forward-fill to align)
+      const unionDatesSet = symbolKeys.reduce((acc: Set<string>, sym) => {
+        for (const k of dateToCloseBySymbol[sym].keys()) acc.add(k);
+        return acc;
+      }, new Set<string>());
+      const sortedDates = Array.from(unionDatesSet).sort();
+
+      // Build aligned closes per symbol using the common date sequence
+      const closesBySymbol: Record<string, number[]> = {};
+      for (const sym of symbolKeys) {
+        const mapDateToClose = dateToCloseBySymbol[sym];
+        const arr: number[] = [];
+        let last: number | undefined = undefined;
+        for (const d of sortedDates) {
+          const v = mapDateToClose.get(d);
+          if (typeof v === 'number' && Number.isFinite(v)) last = v;
+          if (typeof last === 'number') arr.push(last);
+        }
+        closesBySymbol[sym] = arr;
+      }
+
+      const returnsBySymbol: Record<string, number[]> = {};
+      for (const sym of symbolKeys) {
+        const closes = closesBySymbol[sym];
+        const rets: number[] = [];
+        for (let k = 1; k < closes.length; k++) {
+          const prev = closes[k - 1];
+          const curr = closes[k];
+          if (prev && curr) rets.push((curr - prev) / prev);
+        }
+        returnsBySymbol[sym] = rets;
+      }
+
+      const matrix: number[][] = symbolKeys.map(() => symbolKeys.map(() => 1));
+      for (let i = 0; i < symbolKeys.length; i++) {
+        for (let j = 0; j < symbolKeys.length; j++) {
+          if (i === j) { matrix[i][j] = 1; continue; }
+          const val = pearson(returnsBySymbol[symbolKeys[i]], returnsBySymbol[symbolKeys[j]]);
+          matrix[i][j] = Number.isFinite(val) ? Math.max(-1, Math.min(1, val)) : 0;
+        }
+      }
+      setCorrelationMatrix(matrix);
+
+      const base = 'SPX';
+      const baseR = returnsBySymbol[base] || [];
+      const window = 20;
+      const trendData: Record<string, number[]> = {};
+      const priceSpark: Record<string, number[]> = {};
+      for (const sym of symbolKeys) {
+        const r = returnsBySymbol[sym] || [];
+        const len = Math.min(baseR.length, r.length);
+        const arr: number[] = [];
+        if (len >= window) {
+          for (let k = window; k <= len; k++) {
+            const rc = pearson(baseR.slice(k - window, k), r.slice(k - window, k));
+            arr.push(Number.isFinite(rc) ? Math.max(-1, Math.min(1, rc)) : 0);
+          }
+        } else if (len >= 2) {
+          const rc = pearson(baseR.slice(0, len), r.slice(0, len));
+          const val = Number.isFinite(rc) ? Math.max(-1, Math.min(1, rc)) : 0;
+          arr.push(val, val); // ensure >= 2 points
+        }
+        trendData[sym] = arr.slice(-30);
+
+        // normalized adjusted closes for sparkline
+        const closes = closesBySymbol[sym] || [];
+        if (closes.length >= 2) {
+          const minC = Math.min(...closes);
+          const maxC = Math.max(...closes);
+          const rangeC = maxC - minC;
+          priceSpark[sym] = rangeC > 0
+            ? closes.map(c => (c - minC) / rangeC)
+            : closes.map(() => 0.5);
+        }
+      }
+      setCorrelationTrendData(trendData);
+      setIndexSparklineData(priceSpark);
+
       const insights = generateCorrelationInsights(matrix, portfolioCorr);
       setCorrelationInsights(insights);
-      
-      // Generate trend data for each index pair
-      const trendData: Record<string, number[]> = {};
-      const indices = getTopWorldIndices();
-      indices.forEach((index, i) => {
-        trendData[index.symbol] = generateTrendData(matrix[i][i]);
-      });
-      setCorrelationTrendData(trendData);
-      
+
     } catch (error) {
       console.error('Error loading correlation data:', error);
       setCorrelationInsights(['Unable to load correlation insights']);
@@ -1124,11 +1290,11 @@ export default function DashboardScreen() {
               {allocationView === 'sector' && (
                 <>
                   {assetAllocation.map((allocation, index) => (
-                    <View 
+                    <Pressable 
                       key={allocation.sector} 
                       style={[styles.allocationItem, index < assetAllocation.length - 1 && styles.allocationItemBorder]}
-                      onStartShouldSetResponder={() => true}
-                      onResponderGrant={() => {
+                      delayLongPress={500}
+                      onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.sectors[allocation.sector] || []).slice(0, 5);
                         openContributionPopover(allocation.sector, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
@@ -1142,7 +1308,7 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
                         <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </>
               )}
@@ -1150,11 +1316,11 @@ export default function DashboardScreen() {
               {allocationView === 'geographic' && (
                 <>
                   {geographicAllocation.map((allocation, index) => (
-                    <View 
+                    <Pressable 
                       key={allocation.region} 
                       style={[styles.allocationItem, index < geographicAllocation.length - 1 && styles.allocationItemBorder]}
-                      onStartShouldSetResponder={() => true}
-                      onResponderGrant={() => {
+                      delayLongPress={500}
+                      onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.regions[allocation.region] || []).slice(0, 5);
                         openContributionPopover(allocation.region, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
@@ -1168,7 +1334,7 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
                         <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </>
               )}
@@ -1176,11 +1342,11 @@ export default function DashboardScreen() {
               {allocationView === 'marketCap' && (
                 <>
                   {marketCapAllocation.map((allocation, index) => (
-                    <View 
+                    <Pressable 
                       key={allocation.marketCap} 
                       style={[styles.allocationItem, index < marketCapAllocation.length - 1 && styles.allocationItemBorder]}
-                      onStartShouldSetResponder={() => true}
-                      onResponderGrant={() => {
+                      delayLongPress={500}
+                      onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.marketCaps[allocation.marketCap] || []).slice(0, 5);
                         openContributionPopover(allocation.marketCap, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
@@ -1194,7 +1360,7 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
                         <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </>
               )}
@@ -1204,9 +1370,9 @@ export default function DashboardScreen() {
 
         {/* Recent Scenarios Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Scenarios</Text>
+          <Text style={styles.sectionTitle}>Recent Stress Tests</Text>
           <TouchableOpacity onPress={navigateToScenarios} style={styles.seeAllButton}>
-            <Text style={styles.seeAllText}>Run more</Text>
+            <Text style={styles.seeAllText}>Run stress test</Text>
           </TouchableOpacity>
         </View>
 
@@ -1348,7 +1514,7 @@ export default function DashboardScreen() {
               {getTopWorldIndices().map((index, i) => (
                 <View key={i} style={styles.correlationCell}>
                   <Text style={styles.correlationHeaderText}>{index.symbol}</Text>
-                  <MiniChart data={correlationTrendData[index.symbol]} width={30} height={12} />
+                  <MiniChart data={indexSparklineData[index.symbol]} width={30} height={12} />
                 </View>
               ))}
             </View>
@@ -1713,7 +1879,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#000000',
     fontWeight: '500',
   },
   portfolioCardsContainer: {

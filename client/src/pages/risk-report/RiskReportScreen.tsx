@@ -37,7 +37,7 @@ const DEFAULT_VAR_PARAMS: VaRParams = {
 };
 
 // Update with your actual server IP address and port for mobile/simulator access
-// Example: const API_URL = 'http://192.168.1.100:3001';
+// Example: const API_URL = 'http://192.168.1.100:3000';
 import API_BASE from '../config/api';
 const API_URL = API_BASE; // Use centralized API base
 
@@ -162,7 +162,7 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
               <Text style={{ color: '#273c75', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ backgroundColor: '#273c75', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 }}
+              style={{ backgroundColor: '#000000', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 }}
               onPress={() => onRun(confidence, horizon, lookbackPeriod)}
             >
               <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Run Analysis</Text>
