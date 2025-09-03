@@ -4,6 +4,10 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// Load polyfills early for React Native compatibility
+import 'react-native-url-polyfill/auto';
+import './client/src/lib/supabase-polyfill';
+
 // Import the main app with tab navigation
 import RiskReportApp from './client/src/RiskReportApp';
 import { ThemeProvider } from './client/src/lib/theme-provider';

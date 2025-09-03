@@ -1,4 +1,4 @@
-import 'react-native-url-polyfill/auto';
+// Polyfills are loaded in App.tsx, no need to import here
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database';
@@ -16,6 +16,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-react-native',
+    },
   },
 });
 
