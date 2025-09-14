@@ -39,10 +39,7 @@ import PortfolioDetailsSheet from '../../components/portfolio/PortfolioDetailsSh
 
 // Import enhanced components
 import PerformanceCards from '../../components/portfolio/PerformanceCards';
-import RiskVisualization from '../../components/portfolio/RiskVisualization';
-import MarketContextCard from '../../components/portfolio/MarketContextCard';
 import ActionableRecommendations from '../../components/portfolio/ActionableRecommendations';
-import AdvancedAnalyticsPanel from '../../components/portfolio/AdvancedAnalyticsPanel';
 import GoalBasedTracking from '../../components/portfolio/GoalBasedTracking';
 import EnhancedPortfolioItem from '../../components/portfolio/EnhancedPortfolioItem';
 
@@ -50,11 +47,9 @@ import EnhancedPortfolioItem from '../../components/portfolio/EnhancedPortfolioI
 interface ViewMode {
   type: 'simple' | 'advanced';
   showPerformance: boolean;
-  showRisk: boolean;
   showMarket: boolean;
   showRecommendations: boolean;
   showGoals: boolean;
-  showAdvancedAnalytics: boolean;
 }
 
 // Helper function to format currency
@@ -77,11 +72,9 @@ const PortfolioScreen: React.FC = () => {
   const [viewMode, setViewMode] = usePersistentState<ViewMode>('PortfolioScreen', 'viewMode', {
     type: 'simple',
     showPerformance: true,
-    showRisk: true,
     showMarket: true,
     showRecommendations: true,
-    showGoals: true,
-    showAdvancedAnalytics: false
+    showGoals: true
   });
   
   // New state for edit modal
@@ -266,13 +259,6 @@ const PortfolioScreen: React.FC = () => {
     });
   };
       
-  // Toggle advanced analytics
-  const toggleAdvancedAnalytics = () => {
-    setViewMode({
-      ...viewMode,
-      showAdvancedAnalytics: !viewMode.showAdvancedAnalytics
-    });
-  };
 
   // Calculate total portfolio stats
   const totalValue = portfolios.reduce((sum, p) => sum + p.totalValue, 0);
@@ -374,24 +360,7 @@ const PortfolioScreen: React.FC = () => {
               />
             )}
 
-            {/* Risk Visualization */}
-            {viewMode.showRisk && portfolios.length > 0 && (
-              <RiskVisualization 
-                portfolioId={portfolioIds[0]} 
-                totalValue={totalValue}
-                onRiskDetailsPress={() => console.log('Risk details pressed')}
-                onStressTestPress={() => console.log('Stress test pressed')}
-              />
-            )}
 
-            {/* Market Context */}
-            {viewMode.showMarket && (
-              <MarketContextCard 
-                portfolioIds={portfolioIds}
-                onNewsPress={(headline) => console.log('News pressed:', headline)}
-                onCorrelationPress={() => console.log('Correlation pressed')}
-              />
-            )}
 
             {/* Actionable Recommendations */}
             {viewMode.showRecommendations && (
@@ -411,12 +380,6 @@ const PortfolioScreen: React.FC = () => {
               />
             )}
 
-            {/* Advanced Analytics Panel */}
-            <AdvancedAnalyticsPanel 
-              portfolioIds={portfolioIds}
-              isVisible={viewMode.showAdvancedAnalytics}
-              onToggleVisibility={toggleAdvancedAnalytics}
-            />
           </>
         )}
       

@@ -36,6 +36,7 @@ import yahooFinanceService from '../../../services/yahooFinanceService';
 import LiveMarketIndicators from '../../../components/ui/LiveMarketIndicators';
 import ScenarioDetailsModal, { ScenarioRunData } from '../../../components/ui/ScenarioDetailsModal';
 import PortfolioRiskSettings from '../../../components/ui/PortfolioRiskSettings';
+import MarketContextCard from '../../../components/portfolio/MarketContextCard';
 
 // Define types
 interface Portfolio {
@@ -99,6 +100,13 @@ interface MarketCapAllocation {
   color: string;
 }
 
+interface AssetTypeAllocation {
+  assetType: string;
+  percentage: number;
+  value: number;
+  color: string;
+}
+
 interface RiskInsight {
   type: 'warning' | 'info' | 'success';
   title: string;
@@ -119,7 +127,8 @@ export default function DashboardScreen() {
   const [assetAllocation, setAssetAllocation] = useState<AssetAllocation[]>([]);
   const [geographicAllocation, setGeographicAllocation] = useState<GeographicAllocation[]>([]);
   const [marketCapAllocation, setMarketCapAllocation] = useState<MarketCapAllocation[]>([]);
-  const [allocationView, setAllocationView] = usePersistentState<'sector' | 'geographic' | 'marketCap'>('DashboardScreen', 'allocationView', 'sector');
+  const [assetTypeAllocation, setAssetTypeAllocation] = useState<AssetTypeAllocation[]>([]);
+  const [allocationView, setAllocationView] = usePersistentState<'sector' | 'geographic' | 'marketCap' | 'assetType'>('DashboardScreen', 'allocationView', 'sector');
   const [riskInsights, setRiskInsights] = useState<RiskInsight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -143,6 +152,8 @@ export default function DashboardScreen() {
   const navigation = useNavigation();
   const [correlationMatrix, setCorrelationMatrix] = useState<number[][] | null>(null);
   const [indexSparklineData, setIndexSparklineData] = useState<Record<string, number[]>>({});
+  const [menuVisible, setMenuVisible] = useState(false);
+  const menuAnim = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
   
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -179,6 +190,26 @@ export default function DashboardScreen() {
     
     setGreeting(personalizedGreeting);
   }, [user]);
+
+  // Slide menu handlers
+  const openMenu = () => {
+    setMenuVisible(true);
+    Animated.timing(menuAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeMenu = () => {
+    Animated.timing(menuAnim, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setMenuVisible(false);
+    });
+  };
 
   // Restore scroll position when screen comes into focus
   useFocusEffect(
@@ -247,6 +278,7 @@ export default function DashboardScreen() {
         loadAssetAllocation(fullPortfolios as any),
         loadGeographicAllocation(fullPortfolios as any),
         loadMarketCapAllocation(fullPortfolios as any),
+        loadAssetTypeAllocation(fullPortfolios as any),
         loadRiskInsights(portfolioData, riskMetrics),
         loadCorrelationData(portfolioData) // Load correlation data
       ]);
@@ -265,6 +297,7 @@ export default function DashboardScreen() {
     sectors: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
     regions: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
     marketCaps: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
+    assetTypes: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
   } | null>(null);
 
   const openContributionPopover = (title: string, items: { portfolioName: string; value: number }[]) => {
@@ -308,7 +341,7 @@ export default function DashboardScreen() {
       const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
       const sectors = allAgg.sectors
         .map(s => ({ sector: s.name, percentage: s.percentage, value: s.value, color: s.color }))
-        .sort((a, b) => b.percentage - a.percentage);
+        .sort((a, b) => b.value - a.value);
       setAssetAllocation(sectors.slice(0, 6));
     } catch (error) {
       console.error('Error loading asset allocation:', error);
@@ -322,7 +355,7 @@ export default function DashboardScreen() {
       const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
       const regions = allAgg.regions
         .map(r => ({ region: r.name, percentage: r.percentage, value: r.value, color: r.color }))
-        .sort((a, b) => b.percentage - a.percentage);
+        .sort((a, b) => b.value - a.value);
       setGeographicAllocation(regions);
     } catch (error) {
       console.error('Error loading geographic allocation:', error);
@@ -336,11 +369,25 @@ export default function DashboardScreen() {
       const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
       const caps = allAgg.marketCaps
         .map(m => ({ marketCap: m.name, percentage: m.percentage, value: m.value, color: m.color }))
-        .sort((a, b) => b.percentage - a.percentage);
+        .sort((a, b) => b.value - a.value);
       setMarketCapAllocation(caps);
     } catch (error) {
       console.error('Error loading market cap allocation:', error);
       setMarketCapAllocation([]);
+    }
+  };
+
+  // Load asset type allocation
+  const loadAssetTypeAllocation = async (portfolioData: Portfolio[]) => {
+    try {
+      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
+      const assetTypes = allAgg.assetTypes
+        .map(a => ({ assetType: a.name, percentage: a.percentage, value: a.value, color: a.color }))
+        .sort((a, b) => b.value - a.value);
+      setAssetTypeAllocation(assetTypes);
+    } catch (error) {
+      console.error('Error loading asset type allocation:', error);
+      setAssetTypeAllocation([]);
     }
   };
 
@@ -474,20 +521,6 @@ export default function DashboardScreen() {
         credit: scenario.impactValue * 1500,
         fx: scenario.impactValue * 1000,
         commodity: scenario.impactValue * 500,
-      },
-      greeksBefore: {
-        delta: 0.65,
-        gamma: 0.12,
-        theta: -0.08,
-        vega: 0.25,
-        rho: 0.18,
-      },
-      greeksAfter: {
-        delta: 0.65 + (scenario.impactValue * 0.01),
-        gamma: 0.12 + (scenario.impactValue * 0.005),
-        theta: -0.08 + (scenario.impactValue * 0.002),
-        vega: 0.25 + (scenario.impactValue * 0.008),
-        rho: 0.18 + (scenario.impactValue * 0.003),
       },
     };
 
@@ -1007,6 +1040,9 @@ export default function DashboardScreen() {
       <Animated.View style={[styles.animatedHeader, { opacity: headerOpacity }]}>
         <BlurView intensity={90} tint="light" style={styles.blurView}>
           <Text style={styles.headerTitle}>Risk Dashboard</Text>
+          <TouchableOpacity onPress={openMenu} style={styles.menuButtonOverlay}>
+            <Ionicons name="menu" size={24} color="#000000" />
+          </TouchableOpacity>
         </BlurView>
       </Animated.View>
       
@@ -1039,6 +1075,9 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.headerTitle}>Risk Dashboard</Text>
           </View>
+          <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
+            <Ionicons name="menu" size={24} color="#000000" />
+          </TouchableOpacity>
           {popoverContent && popoverVisible && (
             <Modal transparent visible={popoverVisible} animationType="fade" onRequestClose={() => setPopoverVisible(false)}>
               <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
@@ -1061,6 +1100,19 @@ export default function DashboardScreen() {
 
         {/* Live Market Indicators */}
         <LiveMarketIndicators />
+
+        {/* Market Context Section */}
+        <View style={styles.marketContextContainer}>
+          <MarketContextCard 
+            portfolioIds={portfolios.map(p => p.id)}
+            onNewsPress={(headline) => {
+              Alert.alert('Market News', headline);
+            }}
+            onCorrelationPress={() => {
+              Alert.alert('Correlations', 'Detailed correlation analysis coming soon');
+            }}
+          />
+        </View>
 
         {/* Risk Budget Usage Section */}
         <View style={styles.sectionHeader}>
@@ -1230,7 +1282,7 @@ export default function DashboardScreen() {
         )}
 
         {/* Asset Allocation Section */}
-        {(assetAllocation.length > 0 || geographicAllocation.length > 0 || marketCapAllocation.length > 0) && (
+        {(assetAllocation.length > 0 || geographicAllocation.length > 0 || marketCapAllocation.length > 0 || assetTypeAllocation.length > 0) && (
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Asset Allocation</Text>
@@ -1267,10 +1319,10 @@ export default function DashboardScreen() {
                     styles.toggleButtonText,
                     allocationView === 'geographic' && styles.activeToggleButtonText
                   ]}>
-                    Geography
+                    Regions
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
                     styles.toggleButton,
                     allocationView === 'marketCap' && styles.activeToggleButton
@@ -1281,7 +1333,21 @@ export default function DashboardScreen() {
                     styles.toggleButtonText,
                     allocationView === 'marketCap' && styles.activeToggleButtonText
                   ]}>
-                    Market Cap
+                    Markets
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    allocationView === 'assetType' && styles.activeToggleButton
+                  ]}
+                  onPress={() => setAllocationView('assetType')}
+                >
+                  <Text style={[
+                    styles.toggleButtonText,
+                    allocationView === 'assetType' && styles.activeToggleButtonText
+                  ]}>
+                    Asset
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1358,6 +1424,32 @@ export default function DashboardScreen() {
                       </View>
                       <View style={styles.allocationValues}>
                         <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
+                        <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </>
+              )}
+
+              {allocationView === 'assetType' && (
+                <>
+                  {assetTypeAllocation.map((allocation, index) => (
+                    <Pressable 
+                      key={allocation.assetType} 
+                      style={[styles.allocationItem, index < assetTypeAllocation.length - 1 && styles.allocationItemBorder]}
+                      delayLongPress={500}
+                      onLongPress={() => {
+                        if (!contributionData) return;
+                        const list = (contributionData.assetTypes?.[allocation.assetType] || []).slice(0, 5);
+                        openContributionPopover(allocation.assetType, list.map((i: { portfolioName: string; value: number }) => ({ portfolioName: i.portfolioName, value: i.value })));
+                      }}
+                    >
+                      <View style={styles.allocationInfo}>
+                        <View style={[styles.allocationColorDot, { backgroundColor: allocation.color }]} />
+                        <Text style={styles.allocationSector}>{allocation.assetType}</Text>
+                      </View>
+                      <View style={styles.allocationValues}>
+                        <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(1)}%</Text>
                         <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
                       </View>
                     </Pressable>
@@ -1580,6 +1672,47 @@ export default function DashboardScreen() {
         onRunAgain={handleRunScenarioAgain}
       />
 
+      {/* Slide-in Menu */}
+      <Modal
+        transparent
+        visible={menuVisible}
+        animationType="none"
+        onRequestClose={closeMenu}
+      >
+        <View style={styles.menuModalRoot}>
+          <TouchableOpacity style={styles.menuBackdrop} activeOpacity={1} onPress={closeMenu} />
+          <Animated.View
+            style={[
+              styles.menuSheet,
+              { transform: [{ translateX: menuAnim.interpolate({ inputRange: [0, 1], outputRange: [300, 0] }) }] }
+            ]}
+          >
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Menu</Text>
+              <TouchableOpacity onPress={closeMenu} style={styles.menuCloseButton}>
+                <Ionicons name="close" size={22} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); navigation.navigate('Advisors' as never); }}>
+              <Ionicons name="people-outline" size={20} color="#000" />
+              <Text style={styles.menuItemText}>Advisors</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); navigateToRiskReport(); }}>
+              <Ionicons name="pulse-outline" size={20} color="#000" />
+              <Text style={styles.menuItemText}>Risk Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); navigateToPortfolio(); }}>
+              <Ionicons name="briefcase-outline" size={20} color="#000" />
+              <Text style={styles.menuItemText}>Portfolio</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); navigateToScenarios(); }}>
+              <Ionicons name="flash-outline" size={20} color="#000" />
+              <Text style={styles.menuItemText}>Scenarios</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
+
       {/* Correlation Detail Modal */}
       <Modal
         visible={correlationDetailModalVisible}
@@ -1789,6 +1922,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 10,
   },
+  menuButtonOverlay: {
+    position: 'absolute',
+    right: 16,
+    bottom: 10,
+    padding: 6,
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 40 : 10,
@@ -1806,6 +1945,9 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#000000',
+  },
+  menuButton: {
+    padding: 8,
   },
   card: {
     marginHorizontal: 16,
@@ -2070,6 +2212,51 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 32,
+  },
+  menuModalRoot: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  menuSheet: {
+    width: 260,
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  menuCloseButton: {
+    padding: 6,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  menuItemText: {
+    marginLeft: 10,
+    fontSize: 15,
+    color: '#000000',
+    fontWeight: '500',
   },
   portfolioBreakdownContainer: {
     marginTop: 16,
@@ -2569,5 +2756,9 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     lineHeight: 18,
     marginLeft: 6,
+  },
+  marketContextContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
 }); 

@@ -1,17 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
 
 interface MarketData {
-  indices: Array<{
-    symbol: string;
-    name: string;
-    value: number;
-    change: number;
-    changePercent: number;
-    sparkline: number[];
-  }>;
   sectors: Array<{
     name: string;
     performance: number;
@@ -43,7 +34,7 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
 }) => {
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'indices' | 'sectors' | 'news'>('indices');
+  const [selectedTab, setSelectedTab] = useState<'sectors' | 'news'>('sectors');
 
   useEffect(() => {
     loadMarketData();
@@ -54,32 +45,6 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
     try {
       // Mock data - in real app, this would come from market data service
       const mockData: MarketData = {
-        indices: [
-          {
-            symbol: 'SPX',
-            name: 'S&P 500',
-            value: 4567.89,
-            change: 23.45,
-            changePercent: 0.52,
-            sparkline: [4540, 4550, 4545, 4560, 4555, 4570, 4568]
-          },
-          {
-            symbol: 'DJI',
-            name: 'Dow Jones',
-            value: 34567.12,
-            change: -45.67,
-            changePercent: -0.13,
-            sparkline: [34600, 34590, 34580, 34570, 34560, 34550, 34567]
-          },
-          {
-            symbol: 'IXIC',
-            name: 'Nasdaq',
-            value: 14234.56,
-            change: 78.90,
-            changePercent: 0.56,
-            sparkline: [14150, 14180, 14200, 14220, 14210, 14230, 14235]
-          }
-        ],
         sectors: [
           { name: 'Technology', performance: 1.2, relevance: 85 },
           { name: 'Healthcare', performance: 0.8, relevance: 60 },
@@ -122,78 +87,8 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
     }
   };
 
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'decimal',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  };
-
   const formatPercentage = (value: number): string => {
     return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-  };
-
-  const generateSparklinePath = (data: number[], width: number, height: number): string => {
-    if (data.length === 0) return '';
-    
-    const minValue = Math.min(...data);
-    const maxValue = Math.max(...data);
-    const range = maxValue - minValue || 1;
-    
-    const points = data.map((value, index) => {
-      const x = (index / (data.length - 1)) * width;
-      const y = height - ((value - minValue) / range) * height;
-      return `${x},${y}`;
-    });
-    
-    return `M ${points.join(' L ')}`;
-  };
-
-  const renderSparkline = (data: number[], isPositive: boolean) => {
-    const width = 50;
-    const height = 20;
-    const path = generateSparklinePath(data, width, height);
-    
-    return (
-      <Svg width={width} height={height}>
-        <Path
-          d={path}
-          stroke={isPositive ? '#10b981' : '#ef4444'}
-          strokeWidth={1.5}
-          fill="none"
-        />
-      </Svg>
-    );
-  };
-
-  const renderIndices = () => {
-    if (!marketData) return null;
-    
-    return (
-      <View style={styles.indicesContainer}>
-        {marketData.indices.map((index) => (
-          <View key={index.symbol} style={styles.indexItem}>
-            <View style={styles.indexHeader}>
-              <View>
-                <Text style={styles.indexSymbol}>{index.symbol}</Text>
-                <Text style={styles.indexName}>{index.name}</Text>
-              </View>
-              {renderSparkline(index.sparkline, index.change >= 0)}
-            </View>
-            <View style={styles.indexData}>
-              <Text style={styles.indexValue}>{formatCurrency(index.value)}</Text>
-              <Text style={[
-                styles.indexChange,
-                index.change >= 0 ? styles.positiveChange : styles.negativeChange
-              ]}>
-                {formatPercentage(index.changePercent)}
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    );
   };
 
   const renderSectors = () => {
@@ -289,7 +184,7 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
       </View>
 
       <View style={styles.tabsContainer}>
-        {['indices', 'sectors', 'news'].map((tab) => (
+        {['sectors', 'news'].map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[
@@ -309,7 +204,6 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {selectedTab === 'indices' && renderIndices()}
         {selectedTab === 'sectors' && renderSectors()}
         {selectedTab === 'news' && renderNews()}
       </ScrollView>
@@ -427,43 +321,6 @@ const styles = StyleSheet.create({
   },
   content: {
     maxHeight: 200,
-  },
-  indicesContainer: {
-    gap: 12,
-  },
-  indexItem: {
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-  },
-  indexHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  indexSymbol: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  indexName: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  indexData: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  indexValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  indexChange: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   positiveChange: {
     color: '#10b981',

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,8 +26,27 @@ import { useState } from 'react';
 // Import state persistence
 import { ScreenStateProvider } from './hooks/use-screen-state';
 
-// Create tab navigator
+// Create navigators
 const Tab = createBottomTabNavigator();
+const RootStack = createStackNavigator();
+
+// Tabs component extracted for root stack usage
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen name="Home" component={DashboardScreen} />
+      <Tab.Screen name="Portfolio" component={PortfolioScreen} />
+      <Tab.Screen name="Risk" component={RiskReportScreen} />
+      <Tab.Screen name="Stress Test" component={ScenariosScreen} />
+      <Tab.Screen name="Profile" component={SettingsNavigator} />
+    </Tab.Navigator>
+  );
+}
 
 export default function RiskReportApp() {
   const [isLoading, setIsLoading] = useState(true);
@@ -80,19 +100,11 @@ export default function RiskReportApp() {
         <StatusBar barStyle="dark-content" />
         <ScreenStateProvider>
           <NavigationContainer>
-            <Tab.Navigator
-            tabBar={(props) => <CustomTabBar {...props} />}
-            screenOptions={{
-              headerShown: false,
-            }}
-          >
-            <Tab.Screen name="Home" component={DashboardScreen} />
-            <Tab.Screen name="Portfolio" component={PortfolioScreen} />
-            <Tab.Screen name="Risk" component={RiskReportScreen} />
-            <Tab.Screen name="Stress Test" component={ScenariosScreen} />
-            <Tab.Screen name="Profile" component={SettingsNavigator} />
-          </Tab.Navigator>
-        </NavigationContainer>
+            <RootStack.Navigator screenOptions={{ headerShown: false }}>
+              <RootStack.Screen name="MainTabs" component={MainTabs} />
+              <RootStack.Screen name="Advisors" component={require('./pages/advisors/AdvisorsScreen').default} />
+            </RootStack.Navigator>
+          </NavigationContainer>
         </ScreenStateProvider>
       </SafeAreaView>
     </GestureHandlerRootView>

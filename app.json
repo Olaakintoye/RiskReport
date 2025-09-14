@@ -16,12 +16,21 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ola.CDInvestmentPro",
+      "buildNumber": "1",
+      "associatedDomains": ["applinks:cdinvestmentpro.com"],
       "infoPlist": {
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsArbitraryLoads": false,
+          "NSExceptionDomains": {
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
         },
-        "NSPhotoLibraryUsageDescription": "Allow CDInvestmentPro to access your photos to upload videos.",
-        "NSCameraUsageDescription": "Allow CDInvestmentPro to access your camera to record videos."
+        "NSPhotoLibraryUsageDescription": "CDInvestmentPro needs access to your photo library to upload images for portfolio documentation.",
+        "NSCameraUsageDescription": "CDInvestmentPro needs access to your camera to capture photos for portfolio documentation.",
+        "NSLocationWhenInUseUsageDescription": "CDInvestmentPro may use your location to provide relevant market data and compliance features.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -30,7 +39,8 @@
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -54,11 +64,12 @@
       "router": {
         "origin": false
       },
+      "apiBase": "https://your-production-api.com",
+      "stressBase": "https://your-production-api.com",
       "eas": {
-        "projectId": "your-project-id"
-      },
-      "apiBase": "http://192.168.1.106:3000",
-      "stressBase": "http://192.168.1.106:3000"
-    }
+        "projectId": "52d31adc-11b2-4615-8dda-ba54f2e67eb8"
+      }
+    },
+    "owner": "olaakin"
   }
-} 
+}

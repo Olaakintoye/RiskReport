@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RiskMetrics, VaRResults } from '../../../../services/riskService';
+import portfolioService from '../../../../services/portfolioService';
+import riskTrackingService from '../../../../services/riskTrackingService';
 
 interface RiskTrackerProps {
   riskMetrics: RiskMetrics | null;
   varResults: VaRResults | null;
   portfolioValue: number;
+  portfolioId?: string;
   onViewMore?: () => void;
+  onEditThresholds?: () => void;
 }
 
 interface RiskThreshold {
@@ -40,43 +44,126 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
   riskMetrics,
   varResults,
   portfolioValue,
-  onViewMore
+  portfolioId,
+  onViewMore,
+  onEditThresholds
 }) => {
   const [selectedTab, setSelectedTab] = useState<'thresholds' | 'score'>('thresholds');
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [customThresholds, setCustomThresholds] = useState<{
+    var95?: number;
+    volatility?: number;
+    maxDrawdown?: number;
+    sharpeMin?: number;
+    sortinoMin?: number;
+  }>({});
+  const [latestDbMetrics, setLatestDbMetrics] = useState<{
+    var95?: number | null;
+    volatility?: number | null;
+    sharpeRatio?: number | null;
+    beta?: number | null;
+    maxDrawdown?: number | null;
+  } | null>(null);
 
-  // Calculate risk score (0-100) based on metrics
+  // Load user-defined thresholds from the portfolio risk profile
+  useEffect(() => {
+    let isActive = true;
+    const loadThresholds = async () => {
+      try {
+        if (!portfolioId) return;
+        const portfolio = await portfolioService.getPortfolioById(portfolioId);
+        if (!portfolio || !isActive) return;
+        const rp = portfolio.riskProfile || {};
+        setCustomThresholds({
+          var95: rp.var_95_limit,
+          volatility: rp.volatility_limit,
+          maxDrawdown: rp.max_drawdown_limit,
+          sharpeMin: rp.sharpe_min,
+          sortinoMin: rp.sortino_min,
+        });
+      } catch (e) {
+        // best-effort; keep defaults
+      }
+    };
+    loadThresholds();
+    return () => { isActive = false; };
+  }, [portfolioId]);
+
+  // Load latest metrics from DB if available (VaR, vol, sharpe, beta, drawdown)
+  useEffect(() => {
+    let isActive = true;
+    const loadLatest = async () => {
+      try {
+        if (!portfolioId) return;
+        const latest = await riskTrackingService.getLatestRiskMetrics(portfolioId);
+        if (!isActive) return;
+        setLatestDbMetrics(latest);
+      } catch (e) {
+        // ignore; use provided metrics
+      }
+    };
+    loadLatest();
+    return () => { isActive = false; };
+  }, [portfolioId]);
+
+  // Select metric values prioritizing DB (real) data when available
+  const effectiveMetrics = useMemo(() => {
+    const rm = riskMetrics;
+    const lm = latestDbMetrics;
+    return {
+      var95: lm?.var95 ?? varResults?.varPercentage ?? null,
+      volatility: lm?.volatility ?? (rm ? rm.volatility : null),
+      sharpeRatio: lm?.sharpeRatio ?? (rm ? rm.sharpeRatio : null),
+      beta: lm?.beta ?? (rm ? rm.beta : null),
+      maxDrawdown: lm?.maxDrawdown ?? (rm ? rm.maxDrawdown : null),
+      sortinoRatio: rm ? rm.sortinoRatio : null,
+    };
+  }, [riskMetrics, latestDbMetrics, varResults]);
+
+  // Calculate risk score (0-100) using threshold-aware, weighted model
   const calculateRiskScore = (): number => {
-    if (!riskMetrics || !varResults) return 50; // Default mid-point
+    const m = effectiveMetrics;
+    if (!m || m.var95 == null || m.volatility == null || m.sharpeRatio == null || m.beta == null || m.maxDrawdown == null) {
+      return 0;
+    }
 
-    // Simplified scoring algorithm
-    // Lower is better for VaR, volatility, max drawdown, beta
-    // Higher is better for Sharpe and Sortino ratios
-    
-    let score = 100;
-    
-    // VaR score (0-25 points)
-    const varScore = Math.max(0, 25 - (varResults.varPercentage * 2.5));
-    
-    // Volatility score (0-20 points)
-    const volatilityScore = Math.max(0, 20 - (riskMetrics.volatility * 0.8));
-    
-    // Sharpe ratio score (0-20 points)
-    const sharpeScore = Math.min(20, riskMetrics.sharpeRatio * 10);
-    
-    // Beta score (0-15 points)
-    // Optimal beta is around 1.0
-    const betaDeviation = Math.abs(riskMetrics.beta - 1.0);
-    const betaScore = Math.max(0, 15 - (betaDeviation * 10));
-    
-    // Drawdown score (0-20 points)
-    const drawdownScore = Math.max(0, 20 - (riskMetrics.maxDrawdown * 0.8));
-    
-    // Calculate total score
-    score = varScore + volatilityScore + sharpeScore + betaScore + drawdownScore;
-    
-    // Ensure score is within 0-100
-    return Math.min(100, Math.max(0, score));
+    // Thresholds with sensible defaults if user hasn't set
+    const varLimit = customThresholds.var95 ?? 5.0; // %
+    const volLimit = customThresholds.volatility ?? 20.0; // %
+    const ddLimit = customThresholds.maxDrawdown ?? 15.0; // %
+    const sharpeMin = customThresholds.sharpeMin ?? 1.0;
+    const sortinoMin = customThresholds.sortinoMin ?? 1.0;
+
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+    // Component scores normalized to 0..1
+    const varComponent = clamp01(1 - (m.var95 as number) / varLimit);
+    const volComponent = clamp01(1 - (m.volatility as number) / volLimit);
+    const ddComponent = clamp01(1 - (m.maxDrawdown as number) / ddLimit);
+    const sharpeComponent = clamp01((m.sharpeRatio as number) / sharpeMin);
+    const sortinoComponent = m.sortinoRatio != null ? clamp01((m.sortinoRatio as number) / sortinoMin) : 0.5;
+    const betaComponent = clamp01(1 - Math.abs((m.beta as number) - 1.0) / 0.5); // full score within ±0.0; 0 at ±0.5
+
+    // Weights sum to 100
+    const weights = {
+      var: 25,
+      vol: 15,
+      dd: 20,
+      sharpe: 20,
+      sortino: 10,
+      beta: 10,
+    };
+
+    const weighted = (
+      varComponent * weights.var +
+      volComponent * weights.vol +
+      ddComponent * weights.dd +
+      sharpeComponent * weights.sharpe +
+      sortinoComponent * weights.sortino +
+      betaComponent * weights.beta
+    ) / 100;
+
+    return Math.round(clamp01(weighted) * 100);
   };
 
   // Determine risk level from score
@@ -88,55 +175,62 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
     return { text: 'High Risk', color: '#ef4444' };
   };
 
-  // Generate risk thresholds
+  // Generate risk thresholds (prefer user settings; fallback defaults)
   const getRiskThresholds = (): RiskThreshold[] => {
-    if (!riskMetrics || !varResults) return [];
+    if (!riskMetrics && !varResults) return [];
+    const m = effectiveMetrics;
+    const var95 = m.var95 ?? 0;
+    const vol = m.volatility ?? 0;
+    const dd = m.maxDrawdown ?? 0;
+    const sharpe = m.sharpeRatio ?? 0;
+    const sortino = m.sortinoRatio ?? 0;
+
+    const varLimit = customThresholds.var95 ?? 5.0;
+    const volLimit = customThresholds.volatility ?? 20.0;
+    const ddLimit = customThresholds.maxDrawdown ?? 15.0;
+    const sharpeMin = customThresholds.sharpeMin ?? 1.0;
+    const sortinoMin = customThresholds.sortinoMin ?? 1.0;
 
     return [
       {
-        metricName: 'Value at Risk',
-        thresholdValue: 5.0, // 5% VaR threshold
-        currentValue: varResults.varPercentage,
+        metricName: 'Value at Risk (95%)',
+        thresholdValue: varLimit,
+        currentValue: var95,
         unit: '%',
-        status: varResults.varPercentage > 5.0 ? 'danger' : 
-                varResults.varPercentage > 3.0 ? 'warning' : 'safe',
-        description: 'Maximum expected loss at 95% confidence level'
+        status: var95 > varLimit ? 'danger' : var95 > varLimit * 0.6 ? 'warning' : 'safe',
+        description: 'Maximum expected 1-day loss at 95% confidence'
       },
       {
         metricName: 'Annualised Volatility',
-        thresholdValue: 20.0,
-        currentValue: riskMetrics.volatility,
+        thresholdValue: volLimit,
+        currentValue: vol,
         unit: '%',
-        status: riskMetrics.volatility > 20.0 ? 'danger' : 
-                riskMetrics.volatility > 15.0 ? 'warning' : 'safe',
-        description: 'Portfolio volatility should remain below 20%'
+        status: vol > volLimit ? 'danger' : vol > volLimit * 0.75 ? 'warning' : 'safe',
+        description: 'Upper bound for annualized portfolio volatility'
       },
       {
         metricName: 'Max Drawdown',
-        thresholdValue: 15.0,
-        currentValue: riskMetrics.maxDrawdown,
+        thresholdValue: ddLimit,
+        currentValue: dd,
         unit: '%',
-        status: riskMetrics.maxDrawdown > 15.0 ? 'danger' : 
-                riskMetrics.maxDrawdown > 10.0 ? 'warning' : 'safe',
+        status: dd > ddLimit ? 'danger' : dd > ddLimit * 0.66 ? 'warning' : 'safe',
         description: 'Largest peak-to-trough decline'
       },
       {
-        metricName: 'Sharpe Ratio',
-        thresholdValue: 1.0,
-        currentValue: riskMetrics.sharpeRatio,
+        metricName: 'Sharpe Ratio (min)',
+        thresholdValue: sharpeMin,
+        currentValue: sharpe,
         unit: '',
-        status: riskMetrics.sharpeRatio < 1.0 ? 'warning' : 
-                riskMetrics.sharpeRatio < 0.5 ? 'danger' : 'safe',
-        description: 'Risk-adjusted return measure'
+        status: sharpe < Math.min(0.5, sharpeMin * 0.5) ? 'danger' : sharpe < sharpeMin ? 'warning' : 'safe',
+        description: 'Risk-adjusted return (higher is better)'
       },
       {
-        metricName: 'Sortino Ratio',
-        thresholdValue: 1.0,
-        currentValue: riskMetrics.sortinoRatio,
+        metricName: 'Sortino Ratio (min)',
+        thresholdValue: sortinoMin,
+        currentValue: sortino,
         unit: '',
-        status: riskMetrics.sortinoRatio < 1.0 ? 'warning' : 
-                riskMetrics.sortinoRatio < 0.5 ? 'danger' : 'safe',
-        description: 'Downside risk-adjusted returns'
+        status: sortino < Math.min(0.5, sortinoMin * 0.5) ? 'danger' : sortino < sortinoMin ? 'warning' : 'safe',
+        description: 'Downside risk-adjusted return (higher is better)'
       }
     ];
   };
@@ -225,17 +319,56 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
   // Calculate risk gauge position
   const gaugePosition = (riskScore / 100) * (width - 80);
 
+  // Calculate usage percentage for progress bar based on metric type
+  const calculateUsagePercent = (threshold: RiskThreshold): number => {
+    const current = threshold.currentValue || 0;
+    const limit = threshold.thresholdValue || 1;
+    
+    // Debug logging for volatility
+    if (threshold.metricName.includes('Volatility')) {
+      console.log(`📊 Volatility Usage Debug:`, {
+        metricName: threshold.metricName,
+        currentValue: current,
+        thresholdValue: limit,
+        calculatedUsage: (current / limit) * 100,
+        customThresholds: customThresholds
+      });
+    }
+    
+    // For metrics where lower is better (VaR, Volatility, Max Drawdown)
+    if (threshold.metricName.includes('VaR') || 
+        threshold.metricName.includes('Volatility') || 
+        threshold.metricName.includes('Drawdown')) {
+      // Show how much of the limit is used (0% = perfect, 100% = at limit)
+      return Math.min(100, Math.max(0, (current / limit) * 100));
+    }
+    
+    // For metrics where higher is better (Sharpe, Sortino ratios)
+    if (threshold.metricName.includes('Sharpe') || 
+        threshold.metricName.includes('Sortino')) {
+      // For minimums: if we're above the minimum, show 100% (full bar = good)
+      // If below minimum, show proportional fill
+      if (current >= limit) {
+        return 100; // Meeting or exceeding minimum = full green bar
+      } else {
+        return Math.max(0, (current / limit) * 100); // Below minimum = partial fill
+      }
+    }
+    
+    // Default case for other metrics
+    return Math.min(100, Math.max(0, (current / limit) * 100));
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Risk Monitoring</Text>
-        {onViewMore && (
+        {onEditThresholds && (
           <TouchableOpacity
             style={styles.viewMoreButton}
-            onPress={onViewMore}
+            onPress={onEditThresholds}
           >
-            <Text style={styles.viewMoreText}>See Details</Text>
-            <Ionicons name="chevron-forward" size={16} color="#007AFF" />
+            <Ionicons name="settings-outline" size={18} color="#007AFF" />
           </TouchableOpacity>
         )}
       </View>
@@ -341,20 +474,23 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
                           threshold.status === 'safe' ? styles.progressSafe :
                           threshold.status === 'warning' ? styles.progressWarning :
                           styles.progressDanger,
-                          { width: `${Math.min(100, (threshold.currentValue / threshold.thresholdValue) * 100)}%` }
+                          { width: `${calculateUsagePercent(threshold)}%` }
                         ]} 
                       />
                     </View>
                     <View style={styles.progressLabels}>
                       <Text style={styles.progressLabelLeft}>0{threshold.unit}</Text>
                       <Text style={styles.progressLabelThreshold}>
-                        Threshold: {threshold.thresholdValue}{threshold.unit}
+                        Limit/Min: {threshold.thresholdValue}{threshold.unit}
                       </Text>
                       <Text style={styles.progressLabelRight}>
-                        {(threshold.thresholdValue * 2).toFixed(1)}{threshold.unit}
+                        {calculateUsagePercent(threshold).toFixed(1)}% used
                       </Text>
                     </View>
                   </View>
+                  <Text style={styles.thresholdDescription}>
+                    Thresholds come from Risk Settings. Adjust to your policy.
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>

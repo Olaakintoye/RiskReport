@@ -45,6 +45,7 @@ import MetricsCard from './components/MetricsCard';
 import ExportToolsCard from './components/ExportToolsCard';
 import BacktestCard from './components/BacktestCard';
 import RiskTracker from './components/RiskTracker';
+import PortfolioRiskSettings from '../../../components/ui/PortfolioRiskSettings';
 
 // Constants
 import API_BASE from '../../../config/api';
@@ -344,6 +345,7 @@ const RiskReportScreen: React.FC = () => {
   const [chartRefreshTrigger, setChartRefreshTrigger] = useState(0);
   const [portfolioComposition, setPortfolioComposition] = useState<PortfolioComposition | null>(null);
   const [hasLoadedLastAnalysis, setHasLoadedLastAnalysis] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   
   // Load last VaR analysis for a portfolio
   const loadLastVaRAnalysis = async (portfolioId: string) => {
@@ -842,18 +844,13 @@ const RiskReportScreen: React.FC = () => {
       positionRisk: <PositionRiskCard portfolioId={selectedPortfolioSummary?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'} detailed={true}
                      onDrillDown={(symbol) => Alert.alert(`Position Details: ${symbol}`, 
                        `Detailed risk analysis for ${symbol} will be displayed here.`)} />,
-      riskMonitoring: <RiskTracker 
-                     riskMetrics={riskMetrics} 
-                     varResults={varResults.parametric} 
-                     portfolioValue={selectedPortfolioSummary?.totalValue || 0} />
     };
     
     const titles: Record<string, string> = {
       varAnalysis: 'Value at Risk Analysis',
       timeSeries: 'Risk Tracking',
       benchmark: 'Benchmark Comparison',
-      positionRisk: 'Position Risk Analysis',
-      riskMonitoring: 'Risk Monitoring Dashboard'
+      positionRisk: 'Position Risk Analysis'
     };
     
     return (
@@ -972,7 +969,8 @@ const RiskReportScreen: React.FC = () => {
           riskMetrics={riskMetrics}
           varResults={varResults.parametric}
           portfolioValue={selectedPortfolioSummary?.totalValue || 0}
-          onViewMore={() => handleShowDetailView('riskTracker')}
+          portfolioId={selectedPortfolioSummary?.id}
+          onEditThresholds={() => setSettingsModalVisible(true)}
         />
 
         {/* Backtesting (before Benchmark Comparison) */}
@@ -1009,6 +1007,23 @@ const RiskReportScreen: React.FC = () => {
         defaultSimulations={analysisSimulations}
         defaultLookbackPeriod={analysisLookbackPeriod}
       />
+
+      {/* Risk Settings Modal */}
+      {selectedPortfolioSummary && (
+        <PortfolioRiskSettings
+          visible={settingsModalVisible}
+          onClose={() => setSettingsModalVisible(false)}
+          portfolioId={selectedPortfolioSummary.id}
+          portfolioName={selectedPortfolioSummary.name}
+          onUpdate={async () => {
+            // reload selected portfolio to sync riskProfile locally
+            if (selectedPortfolioSummary?.id) {
+              const p = await portfolioService.getPortfolioById(selectedPortfolioSummary.id);
+              if (p) setSelectedPortfolio(p);
+            }
+          }}
+        />
+      )}
     </View>
   );
 };

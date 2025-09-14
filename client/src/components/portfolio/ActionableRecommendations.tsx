@@ -27,18 +27,18 @@ interface ActionableRecommendationsProps {
   onDismiss?: (recommendationId: string) => void;
 }
 
-const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
-  portfolioIds = [],
-  onRecommendationPress,
-  onDismiss
-}) => {
+const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = (props) => {
+  const { portfolioIds = [], onRecommendationPress, onDismiss } = props;
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPriority, setSelectedPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
+  // Ensure portfolioIds is always an array for downstream logic
+  const safePortfolioIds = Array.isArray(portfolioIds) ? portfolioIds : [];
+
   useEffect(() => {
     loadRecommendations();
-  }, [portfolioIds]);
+  }, [safePortfolioIds.length]);
 
   const loadRecommendations = async () => {
     setLoading(true);
@@ -279,7 +279,8 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
       <View style={styles.filterContainer}>
         <Text style={styles.filterLabel}>Priority:</Text>
         <View style={styles.filterButtons}>
-          {['all', 'high', 'medium', 'low'].map((priority) => (
+          {['all', 'high', 'medium', 'low'].map((priority) => {
+            return (
             <TouchableOpacity
               key={priority}
               style={[
@@ -292,15 +293,17 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
                 styles.filterButtonText,
                 selectedPriority === priority && styles.selectedFilterButtonText
               ]}>
-                {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                {priority === 'all' ? 'All' : priority === 'high' ? 'High' : priority === 'medium' ? 'Medium' : 'Low'}
               </Text>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </View>
       </View>
 
       <ScrollView style={styles.recommendationsContainer} showsVerticalScrollIndicator={false}>
-        {filteredRecommendations.map((recommendation) => (
+        {filteredRecommendations.map((recommendation) => {
+          return (
           <TouchableOpacity
             key={recommendation.id}
             style={styles.recommendationItem}
@@ -344,18 +347,18 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
               <View style={styles.impactContainer}>
                 <Text style={styles.impactLabel}>Expected Impact:</Text>
                 <Text style={styles.impactText}>{recommendation.impact.expected}</Text>
-                {recommendation.value && recommendation.value > 0 && (
+                {Number(recommendation.value) > 0 ? (
                   <Text style={styles.impactValue}>
-                    {formatCurrency(recommendation.value)}
+                    {formatCurrency(recommendation.value as number)}
                   </Text>
-                )}
+                ) : null}
               </View>
               <View style={styles.confidenceContainer}>
                 <Text style={styles.confidenceLabel}>Confidence:</Text>
                 <View style={styles.confidenceBar}>
                   <View style={[
                     styles.confidenceBarFill,
-                    { width: `${recommendation.impact.confidence}%` }
+                    { width: (recommendation.impact.confidence + '%') as any }
                   ]} />
                 </View>
                 <Text style={styles.confidenceText}>{recommendation.impact.confidence}%</Text>
@@ -371,13 +374,14 @@ const ActionableRecommendations: React.FC<ActionableRecommendationsProps> = ({
             <View style={styles.quickActionsRow}>
               {(recommendation.type === 'rebalance' || recommendation.type === 'risk_alert' || recommendation.type === 'optimization') && (
                 <TouchableOpacity style={styles.quickActionButton} onPress={() => handleQuickApply(recommendation)}>
-                  <MaterialCommunityIcons name="lightning-bolt" size={16} color="#fff" />
+                  <MaterialCommunityIcons name="lightning-bolt" size={16} color="#fff" style={{ marginRight: 6 }} />
                   <Text style={styles.quickActionText}>One‑Tap Fix</Text>
                 </TouchableOpacity>
               )}
             </View>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -403,7 +407,6 @@ const styles = StyleSheet.create({
   quickActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     backgroundColor: '#273c75',
     paddingHorizontal: 12,
     paddingVertical: 8,

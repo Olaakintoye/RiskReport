@@ -7,6 +7,7 @@ import type { Portfolio } from './portfolioService';
 export type SectorAllocation = { sector: string; value: number; };
 export type RegionAllocation = { region: string; value: number; };
 export type MarketCapAllocation = { bucket: string; value: number; };
+export type AssetTypeAllocation = { assetType: string; value: number; };
 export type Contribution = { portfolioId: string; portfolioName: string; value: number; };
 
 type Classification = {
@@ -76,6 +77,19 @@ const marketCapBucket = (mc?: number): string => {
   if (mc >= 2_000_000_000) return 'Mid Cap';
   if (mc >= 300_000_000) return 'Small Cap';
   return 'Micro/Other';
+};
+
+// Normalize asset class names for display
+const normalizeAssetType = (assetClass?: string): string => {
+  const typeMap: Record<string, string> = {
+    'equity': 'Stocks',
+    'bond': 'Bonds',
+    'commodity': 'Commodities',
+    'real_estate': 'Real Estate',
+    'cash': 'Cash',
+    'alternative': 'Alternatives'
+  };
+  return typeMap[assetClass || ''] || 'Other';
 };
 
 const CLASSIFICATION_CACHE_KEY = 'security-classification-cache-v1';
@@ -182,10 +196,24 @@ export const aggregateByMarketCap = async (portfolios: Portfolio[]): Promise<Mar
   return Object.entries(mcMap).map(([bucket, value]) => ({ bucket, value }));
 };
 
+export const aggregateByAssetType = async (portfolios: Portfolio[]): Promise<AssetTypeAllocation[]> => {
+  const assetTypeMap: Record<string, number> = {};
+  for (const p of portfolios) {
+    for (const asset of p.assets) {
+      const value = asset.price * asset.quantity;
+      if (value <= 0) continue;
+      const assetType = normalizeAssetType(asset.assetClass);
+      assetTypeMap[assetType] = (assetTypeMap[assetType] || 0) + value;
+    }
+  }
+  return Object.entries(assetTypeMap).map(([assetType, value]) => ({ assetType, value }));
+};
+
 export const computeContributionBreakdown = async (portfolios: Portfolio[]) => {
   const sectorMap: Record<string, { total: number; byPortfolio: Record<string, number> }> = {};
   const regionMap: Record<string, { total: number; byPortfolio: Record<string, number> }> = {};
   const capMap: Record<string, { total: number; byPortfolio: Record<string, number> }> = {};
+  const assetTypeMap: Record<string, { total: number; byPortfolio: Record<string, number> }> = {};
 
   for (const p of portfolios) {
     for (const a of p.assets) {
@@ -195,6 +223,7 @@ export const computeContributionBreakdown = async (portfolios: Portfolio[]) => {
       const sec = normalizeSector(c.sector);
       const reg = c.region || regionFromCountry(c.country);
       const cap = marketCapBucket(c.marketCap);
+      const assetType = normalizeAssetType(a.assetClass);
 
       if (!sectorMap[sec]) sectorMap[sec] = { total: 0, byPortfolio: {} };
       sectorMap[sec].total += value;
@@ -207,6 +236,10 @@ export const computeContributionBreakdown = async (portfolios: Portfolio[]) => {
       if (!capMap[cap]) capMap[cap] = { total: 0, byPortfolio: {} };
       capMap[cap].total += value;
       capMap[cap].byPortfolio[p.id] = (capMap[cap].byPortfolio[p.id] || 0) + value;
+
+      if (!assetTypeMap[assetType]) assetTypeMap[assetType] = { total: 0, byPortfolio: {} };
+      assetTypeMap[assetType].total += value;
+      assetTypeMap[assetType].byPortfolio[p.id] = (assetTypeMap[assetType].byPortfolio[p.id] || 0) + value;
     }
   }
 
@@ -226,19 +259,22 @@ export const computeContributionBreakdown = async (portfolios: Portfolio[]) => {
   return {
     sectors: toList(sectorMap),
     regions: toList(regionMap),
-    marketCaps: toList(capMap)
+    marketCaps: toList(capMap),
+    assetTypes: toList(assetTypeMap)
   } as {
     sectors: Record<string, Contribution[]>;
     regions: Record<string, Contribution[]>;
     marketCaps: Record<string, Contribution[]>;
+    assetTypes: Record<string, Contribution[]>;
   };
 };
 
 export const computeAllAggregations = async (portfolios: Portfolio[]) => {
-  const [sectors, regions, marketCaps] = await Promise.all([
+  const [sectors, regions, marketCaps, assetTypes] = await Promise.all([
     aggregateBySector(portfolios),
     aggregateByRegion(portfolios),
-    aggregateByMarketCap(portfolios)
+    aggregateByMarketCap(portfolios),
+    aggregateByAssetType(portfolios)
   ]);
   const total = portfolios.reduce((s, p) => s + p.assets.reduce((ss, a) => ss + a.price * a.quantity, 0), 0) || 1;
   
@@ -255,6 +291,10 @@ export const computeAllAggregations = async (portfolios: Portfolio[]) => {
     Colors.warning, Colors.primary, Colors.success, Colors.danger, Colors.info,
     '#f43f5e', '#22c55e'
   ];
+  const assetTypePalette = [
+    Colors.primary, Colors.success, Colors.warning, Colors.danger, Colors.info,
+    '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'
+  ];
 
   const sectorsOut = sectors
     .map((s, idx) => ({ name: s.sector, percentage: (s.value / total) * 100, value: s.value, color: sectorPalette[idx % sectorPalette.length] }));
@@ -262,11 +302,14 @@ export const computeAllAggregations = async (portfolios: Portfolio[]) => {
     .map((r, idx) => ({ name: r.region, percentage: (r.value / total) * 100, value: r.value, color: regionPalette[idx % regionPalette.length] }));
   const capsOut = marketCaps
     .map((m, idx) => ({ name: m.bucket, percentage: (m.value / total) * 100, value: m.value, color: marketCapPalette[idx % marketCapPalette.length] }));
+  const assetTypesOut = assetTypes
+    .map((a, idx) => ({ name: a.assetType, percentage: (a.value / total) * 100, value: a.value, color: assetTypePalette[idx % assetTypePalette.length] }));
 
   return {
     sectors: sectorsOut,
     regions: regionsOut,
     marketCaps: capsOut,
+    assetTypes: assetTypesOut,
   };
 };
 
@@ -275,6 +318,7 @@ export default {
   aggregateBySector,
   aggregateByRegion,
   aggregateByMarketCap,
+  aggregateByAssetType,
   computeContributionBreakdown,
   computeAllAggregations
 };

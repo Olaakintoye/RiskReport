@@ -18,7 +18,11 @@
     "android": "npx expo start --android",
     "web": "npx expo start --web",
     "server": "node server/var-api.js",
-    "web-html": "cd web-html && TARGET_API=http://localhost:3001 node dev-server.mjs"
+    "web-html": "cd web-html && TARGET_API=http://localhost:3001 node dev-server.mjs",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:ios:preview": "eas build --platform ios --profile preview", 
+    "submit:ios": "eas submit --platform ios --profile production",
+    "deploy:testflight": "./deploy-testflight.sh"
   },
   "dependencies": {
     "@babel/core": "^7.23.9",

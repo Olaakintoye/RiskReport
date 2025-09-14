@@ -316,9 +316,7 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
     { key: 'overview', title: 'Overview', icon: 'analytics' },
     { key: 'assets', title: 'Assets', icon: 'list' },
     { key: 'factors', title: 'Factors', icon: 'bar-chart' },
-    { key: 'breakdown', title: 'Asset Breakdown', icon: 'pie-chart' },
     { key: 'risk', title: 'Risk', icon: 'warning' },
-    { key: 'greeks', title: 'Greeks', icon: 'calculator' },
   ];
 
   // ==========================================
@@ -518,6 +516,42 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
 
     return (
       <ScrollView style={styles.tabContent}>
+        {/* Portfolio Stress Impact Summary */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Portfolio Stress Impact Summary</Text>
+          <Text style={styles.cardSubtitle}>
+            How the stress scenario affected your entire portfolio
+          </Text>
+          <View style={styles.portfolioSummary}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Assets</Text>
+              <Text style={styles.summaryValue}>{results.assetResults?.length || 0}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Portfolio Value</Text>
+              <Text style={styles.summaryValue}>
+                {structuredStressTestService.formatCurrency(results.portfolioValue)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Impact</Text>
+              <Text style={[
+                styles.summaryValue,
+                { color: results.totalImpactPercent >= 0 ? '#10b981' : '#ef4444' }
+              ]}>
+                {structuredStressTestService.formatCurrency(results.totalImpact)} 
+                ({structuredStressTestService.formatPercentage(results.totalImpactPercent)})
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Assets with Impact</Text>
+              <Text style={styles.summaryValue}>
+                {results.assetResults?.filter(a => a && typeof a.impact_value === 'number' && Math.abs(a.impact_value) > 0.01).length || 0} of {results.assetResults?.length || 0}
+              </Text>
+            </View>
+          </View>
+        </View>
+        
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Top Impact Contributors</Text>
           {topContributors.map((asset, index) => (
@@ -635,64 +669,6 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
     );
   };
 
-  const renderAssetBreakdownTab = () => {
-    if (!results) return null;
-
-    return (
-      <ScrollView style={styles.tabContent}>
-        {/* Portfolio Stress Impact Summary */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Portfolio Stress Impact Summary</Text>
-          <Text style={styles.cardSubtitle}>
-            How the stress scenario affected your entire portfolio
-          </Text>
-          <View style={styles.portfolioSummary}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Assets</Text>
-              <Text style={styles.summaryValue}>{results.assetResults?.length || 0}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Portfolio Value</Text>
-              <Text style={styles.summaryValue}>
-                {structuredStressTestService.formatCurrency(results.portfolioValue)}
-              </Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Impact</Text>
-              <Text style={[
-                styles.summaryValue,
-                { color: results.totalImpactPercent >= 0 ? '#10b981' : '#ef4444' }
-              ]}>
-                {structuredStressTestService.formatCurrency(results.totalImpact)} 
-                ({structuredStressTestService.formatPercentage(results.totalImpactPercent)})
-              </Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Assets with Impact</Text>
-              <Text style={styles.summaryValue}>
-                {results.assetResults?.filter(a => a && typeof a.impact_value === 'number' && Math.abs(a.impact_value) > 0.01).length || 0} of {results.assetResults?.length || 0}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Individual Asset Breakdown */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Individual Asset Impact Analysis</Text>
-          <Text style={styles.cardSubtitle}>
-            Detailed breakdown showing how each asset in your portfolio was affected by the stress scenario
-          </Text>
-          
-          {(results.assetResults || [])
-            .filter(asset => asset && typeof asset === 'object' && asset.symbol && typeof asset.impact_value === 'number')
-            .sort((a, b) => Math.abs(b.impact_value || 0) - Math.abs(a.impact_value || 0))
-            .map((asset, index) => (
-              <AssetBreakdownCard key={asset.symbol || `asset-${index}`} asset={asset} rank={index + 1} portfolioValue={results.portfolioValue} />
-          ))}
-        </View>
-      </ScrollView>
-    );
-  };
 
   const renderRiskTab = () => {
     if (!results) return null;
@@ -758,70 +734,6 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
     );
   };
 
-  const renderGreeksTab = () => {
-    if (!results) return null;
-
-    return (
-      <ScrollView style={styles.tabContent}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Portfolio Greeks</Text>
-          <Text style={styles.cardSubtitle}>
-            Sensitivity measures for portfolio risk management
-          </Text>
-
-          <View style={styles.greekRow}>
-            <View style={styles.greekHeader}>
-              <Text style={styles.greekName}>Delta (Δ)</Text>
-              <Text style={styles.greekValue}>{(results.greeks.delta || 0).toFixed(3)}</Text>
-            </View>
-            <Text style={styles.greekDescription}>
-              Sensitivity to equity market movements
-            </Text>
-          </View>
-
-          <View style={styles.greekRow}>
-            <View style={styles.greekHeader}>
-              <Text style={styles.greekName}>Gamma (Γ)</Text>
-              <Text style={styles.greekValue}>{(results.greeks.gamma || 0).toFixed(3)}</Text>
-            </View>
-            <Text style={styles.greekDescription}>
-              Rate of change of delta
-            </Text>
-          </View>
-
-          <View style={styles.greekRow}>
-            <View style={styles.greekHeader}>
-              <Text style={styles.greekName}>Theta (Θ)</Text>
-              <Text style={styles.greekValue}>{(results.greeks.theta || 0).toFixed(3)}</Text>
-            </View>
-            <Text style={styles.greekDescription}>
-              Time decay impact
-            </Text>
-          </View>
-
-          <View style={styles.greekRow}>
-            <View style={styles.greekHeader}>
-              <Text style={styles.greekName}>Vega (ν)</Text>
-              <Text style={styles.greekValue}>{(results.greeks.vega || 0).toFixed(3)}</Text>
-            </View>
-            <Text style={styles.greekDescription}>
-              Sensitivity to volatility changes
-            </Text>
-          </View>
-
-          <View style={styles.greekRow}>
-            <View style={styles.greekHeader}>
-              <Text style={styles.greekName}>Rho (ρ)</Text>
-              <Text style={styles.greekValue}>{(results.greeks.rho || 0).toFixed(3)}</Text>
-            </View>
-            <Text style={styles.greekDescription}>
-              Sensitivity to interest rate changes
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    );
-  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -831,12 +743,8 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
         return renderAssetsTab();
       case 'factors':
         return renderFactorsTab();
-      case 'breakdown':
-        return renderAssetBreakdownTab();
       case 'risk':
         return renderRiskTab();
-      case 'greeks':
-        return renderGreeksTab();
       default:
         return renderOverviewTab();
     }
@@ -1217,31 +1125,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 4,
     marginBottom: 12,
-  },
-  greekRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  greekHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  greekName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  greekValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#3b82f6',
-  },
-  greekDescription: {
-    fontSize: 12,
-    color: '#6b7280',
   },
   emptyContainer: {
     flex: 1,

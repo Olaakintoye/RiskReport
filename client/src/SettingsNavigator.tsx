@@ -6,6 +6,7 @@ import SettingsScreen from './pages/settings/SettingsScreen';
 import RiskAlertSettingsScreen from './pages/settings/RiskAlertSettingsScreen';
 import EditRiskAlertScreen from './pages/settings/EditRiskAlertScreen';
 import AlertHistoryScreen from './pages/settings/AlertHistoryScreen';
+import SubscriptionManagementScreen from './pages/settings/SubscriptionManagementScreen';
 
 // Create a stack navigator
 const Stack = createStackNavigator();
@@ -23,6 +24,7 @@ export default function SettingsNavigator() {
       <Stack.Screen name="RiskAlertSettings" component={RiskAlertSettingsScreen} />
       <Stack.Screen name="EditRiskAlert" component={EditRiskAlertScreen} />
       <Stack.Screen name="AlertHistory" component={AlertHistoryScreen} />
+      <Stack.Screen name="SubscriptionManagement" component={SubscriptionManagementScreen} />
     </Stack.Navigator>
   );
 } 

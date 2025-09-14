@@ -12,13 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 // Types for scenario run data
-interface GreeksResults {
-  delta: number;
-  gamma: number;
-  theta: number;
-  vega: number;
-  rho: number;
-}
 
 interface ScenarioRunData {
   id: string;
@@ -33,8 +26,6 @@ interface ScenarioRunData {
   impactValue: number; // Absolute impact in currency
   assetClassImpacts: Record<string, number>; // Impact by asset class
   factorAttribution: Record<string, number>; // Impact attribution by factor
-  greeksBefore: GreeksResults;
-  greeksAfter: GreeksResults;
 }
 
 interface ScenarioDetailsModalProps {
@@ -152,68 +143,6 @@ const ScenarioDetailsModal: React.FC<ScenarioDetailsModalProps> = ({
             </View>
           </View>
 
-          {/* Greeks Change */}
-          <View style={styles.detailsCard}>
-            <Text style={styles.detailsCardTitle}>Greeks Change</Text>
-            <View style={styles.greeksTable}>
-              <View style={styles.greeksTableRow}>
-                <Text style={styles.greeksLabel}>Delta</Text>
-                <Text style={styles.greeksValue}>
-                  {scenarioRun.greeksBefore.delta.toFixed(2)} → {scenarioRun.greeksAfter.delta.toFixed(2)}
-                </Text>
-                <Text style={[
-                  styles.greeksChange,
-                  scenarioRun.greeksAfter.delta >= scenarioRun.greeksBefore.delta ? 
-                    styles.positiveImpact : styles.negativeImpact
-                ]}>
-                  {scenarioRun.greeksAfter.delta >= scenarioRun.greeksBefore.delta ? '+' : ''}
-                  {(scenarioRun.greeksAfter.delta - scenarioRun.greeksBefore.delta).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.greeksTableRow}>
-                <Text style={styles.greeksLabel}>Gamma</Text>
-                <Text style={styles.greeksValue}>
-                  {scenarioRun.greeksBefore.gamma.toFixed(2)} → {scenarioRun.greeksAfter.gamma.toFixed(2)}
-                </Text>
-                <Text style={[
-                  styles.greeksChange,
-                  scenarioRun.greeksAfter.gamma >= scenarioRun.greeksBefore.gamma ? 
-                    styles.positiveImpact : styles.negativeImpact
-                ]}>
-                  {scenarioRun.greeksAfter.gamma >= scenarioRun.greeksBefore.gamma ? '+' : ''}
-                  {(scenarioRun.greeksAfter.gamma - scenarioRun.greeksBefore.gamma).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.greeksTableRow}>
-                <Text style={styles.greeksLabel}>Theta</Text>
-                <Text style={styles.greeksValue}>
-                  {scenarioRun.greeksBefore.theta.toFixed(2)} → {scenarioRun.greeksAfter.theta.toFixed(2)}
-                </Text>
-                <Text style={[
-                  styles.greeksChange,
-                  scenarioRun.greeksAfter.theta >= scenarioRun.greeksBefore.theta ? 
-                    styles.positiveImpact : styles.negativeImpact
-                ]}>
-                  {scenarioRun.greeksAfter.theta >= scenarioRun.greeksBefore.theta ? '+' : ''}
-                  {(scenarioRun.greeksAfter.theta - scenarioRun.greeksBefore.theta).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.greeksTableRow}>
-                <Text style={styles.greeksLabel}>Vega</Text>
-                <Text style={styles.greeksValue}>
-                  {scenarioRun.greeksBefore.vega.toFixed(2)} → {scenarioRun.greeksAfter.vega.toFixed(2)}
-                </Text>
-                <Text style={[
-                  styles.greeksChange,
-                  scenarioRun.greeksAfter.vega >= scenarioRun.greeksBefore.vega ? 
-                    styles.positiveImpact : styles.negativeImpact
-                ]}>
-                  {scenarioRun.greeksAfter.vega >= scenarioRun.greeksBefore.vega ? '+' : ''}
-                  {(scenarioRun.greeksAfter.vega - scenarioRun.greeksBefore.vega).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          </View>
 
           {/* Action Buttons */}
           <View style={styles.actionButtonsContainer}>
@@ -387,34 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#374151',
-  },
-  greeksTable: {
-    marginTop: 8,
-  },
-  greeksTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  greeksLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  greeksValue: {
-    flex: 2,
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  greeksChange: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'right',
   },
   actionButtonsContainer: {
     paddingVertical: 20,

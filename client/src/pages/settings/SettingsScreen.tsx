@@ -483,6 +483,17 @@ const SettingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       
+      {/* Account Section */}
+      <SettingsSection title="Account">
+        <SettingsItem 
+          icon="card"
+          iconColor="#3b82f6"
+          title="Subscription"
+          subtitle="Manage your plan and billing"
+          onPress={() => navigation.navigate('SubscriptionManagement' as never)}
+        />
+      </SettingsSection>
+      
       {/* Data Feeds Section */}
       <SettingsSection title="Data Feeds">
         <SettingsItem 

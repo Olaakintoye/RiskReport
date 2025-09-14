@@ -333,8 +333,6 @@ class StressTestCalculator:
         # Calculate risk metrics
         risk_metrics = self._calculate_risk_metrics(asset_results, scenario_factors)
         
-        # Calculate Greeks (simplified)
-        greeks = self._calculate_greeks(asset_results, scenario_factors)
         
         return {
             'portfolioValue': total_current_value,
@@ -344,7 +342,6 @@ class StressTestCalculator:
             'assetClassImpacts': asset_class_impacts,
             'factorAttribution': factor_attribution,
             'riskMetrics': risk_metrics,
-            'greeks': greeks,
             'assetResults': asset_results,
             'scenarioFactors': scenario_factors,
             'metadata': {
@@ -428,31 +425,6 @@ class StressTestCalculator:
             'volatilityImpact': abs(scenario_factors.get('volatility', 0)) / 100
         }
     
-    def _calculate_greeks(self, asset_results: List[Dict], scenario_factors: Dict[str, float]) -> Dict[str, float]:
-        """Calculate portfolio Greeks (simplified)"""
-        
-        # Delta: Sensitivity to equity movements
-        delta = sum(asset['factor_contributions']['equity'] * asset['weight'] for asset in asset_results)
-        
-        # Gamma: Second-order sensitivity (simplified)
-        gamma = delta * 0.1
-        
-        # Theta: Time decay (simplified)
-        theta = sum(asset['impact_percent'] * asset['weight'] * 0.01 for asset in asset_results)
-        
-        # Vega: Volatility sensitivity
-        vega = abs(scenario_factors.get('volatility', 0)) / 100
-        
-        # Rho: Interest rate sensitivity
-        rho = sum(asset['factor_contributions']['rates'] * asset['weight'] for asset in asset_results)
-        
-        return {
-            'delta': delta,
-            'gamma': gamma,
-            'theta': theta,
-            'vega': vega,
-            'rho': rho
-        }
 
 def main():
     """Main function to run stress test calculation"""
