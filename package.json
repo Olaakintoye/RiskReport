@@ -2,6 +2,7 @@
   "name": "rest-express",
   "version": "1.0.0",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "npm run dev:server & PORT=3001 npm run dev:client",
     "dev:server": "NODE_OPTIONS='--no-warnings --experimental-specifier-resolution=node' PORT=3001 tsx server/index.ts",
