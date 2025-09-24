@@ -38,7 +38,9 @@ export default defineConfig({
             id.includes('expo-router') ||
             id.includes('expo') ||
             id.includes('react-native') ||
-            id.includes('@expo')) {
+            id.includes('@expo') ||
+            id.includes('expo-') ||
+            id.includes('@react-native')) {
           return true;
         }
         return false;
@@ -47,10 +49,18 @@ export default defineConfig({
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
+      ignore: ['expo-router', 'expo', 'react-native', '@expo'],
     },
   },
   optimizeDeps: {
-    exclude: ["@rollup/rollup-linux-x64-gnu"],
+    exclude: [
+      "@rollup/rollup-linux-x64-gnu",
+      "expo-router",
+      "expo",
+      "react-native",
+      "@expo",
+      "@react-native"
+    ],
     force: true,
   },
   esbuild: {
