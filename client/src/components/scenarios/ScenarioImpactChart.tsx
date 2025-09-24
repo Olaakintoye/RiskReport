@@ -91,7 +91,6 @@ const ScenarioImpactChart: React.FC<ScenarioImpactChartProps> = ({
         color: (opacity = 1) => `rgba(100, 116, 139, ${opacity * 0.4})`,
         strokeWidth: 1,
         withDots: false,
-        strokeDashArray: [3, 3],
       });
     }
 
@@ -117,7 +116,6 @@ const ScenarioImpactChart: React.FC<ScenarioImpactChartProps> = ({
             },
             strokeWidth: 2.5,
             withDots: false,
-            strokeDashArray: [8, 4], // More prominent dashed line
           });
         });
     }
@@ -168,12 +166,12 @@ const ScenarioImpactChart: React.FC<ScenarioImpactChartProps> = ({
       strokeWidth: 1,
       stroke: '#e2e8f0',
     },
-    formatYLabel: (value) => {
+    formatYLabel: (value: string) => {
       const num = parseFloat(value);
       if (Math.abs(num) < 0.1) return '0%';
       return `${num > 0 ? '+' : ''}${num.toFixed(1)}%`;
     },
-    formatXLabel: (value) => value === '' ? '' : value,
+    formatXLabel: (value: string) => value === '' ? '' : value,
     yAxisSuffix: '',
     yAxisInterval: 1,
     xAxisInterval: 1,

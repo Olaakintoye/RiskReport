@@ -869,6 +869,25 @@ const RiskReportScreen: React.FC = () => {
               <Text style={styles.metricValue}>{riskMetrics?.beta.toFixed(2)}</Text>
             </View>
           </View>
+
+          <View style={styles.metricsRow}>
+            <View style={styles.metricColumn}>
+              <Text style={styles.metricLabel}>Treynor Ratio</Text>
+              <Text style={styles.metricValue}>
+                {riskMetrics?.treynorRatio !== undefined && riskMetrics?.treynorRatio !== null
+                  ? riskMetrics.treynorRatio.toFixed(3)
+                  : '—'}
+              </Text>
+            </View>
+            <View style={styles.metricColumn}>
+              <Text style={styles.metricLabel}>Calmar Ratio</Text>
+              <Text style={styles.metricValue}>
+                {riskMetrics?.calmarRatio !== undefined && riskMetrics?.calmarRatio !== null
+                  ? riskMetrics.calmarRatio.toFixed(3)
+                  : '—'}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
       

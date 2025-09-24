@@ -217,7 +217,21 @@ def calculate_portfolio_risk_metrics(portfolio_data):
     downside_deviation = calculate_downside_deviation(portfolio_returns)
     
     # Calculate additional metrics
-    annual_return = ((1 + portfolio_returns.mean())**252 - 1) * 100  # Annualized return as percentage
+    # Annualized return in both decimal and percentage for downstream metrics
+    annual_return_decimal = (1 + portfolio_returns.mean())**252 - 1
+    annual_return = annual_return_decimal * 100  # percentage
+    
+    # Treynor ratio: excess return per unit of systematic risk (beta)
+    try:
+        treynor_ratio = (annual_return_decimal - 0.02) / beta if beta not in [0, None] else 0.0
+    except Exception:
+        treynor_ratio = 0.0
+    
+    # Calmar ratio: annual return divided by maximum drawdown
+    try:
+        calmar_ratio = annual_return_decimal / (max_drawdown / 100.0) if max_drawdown > 0 else float('inf')
+    except Exception:
+        calmar_ratio = 0.0
     
     # Prepare results
     results = {
@@ -227,6 +241,8 @@ def calculate_portfolio_risk_metrics(portfolio_data):
         'maxDrawdown': round(max_drawdown, 2),
         'sortinoRatio': round(sortino_ratio, 2),
         'downsideDeviation': round(downside_deviation, 2),
+        'treynorRatio': round(treynor_ratio, 4),
+        'calmarRatio': None if calmar_ratio == float('inf') else round(calmar_ratio, 4),
         'annualReturn': round(annual_return, 2),
         'dataPoints': len(portfolio_returns),
         'startDate': asset_returns.index[0].strftime('%Y-%m-%d'),
@@ -242,6 +258,14 @@ def calculate_portfolio_risk_metrics(portfolio_data):
     print(f"  Max Drawdown: {results['maxDrawdown']:.2f}%")
     print(f"  Sortino Ratio: {results['sortinoRatio']:.2f}")
     print(f"  Downside Deviation: {results['downsideDeviation']:.2f}%")
+    try:
+        print(f"  Treynor Ratio: {results['treynorRatio']}")
+    except Exception:
+        pass
+    try:
+        print(f"  Calmar Ratio: {results['calmarRatio']}")
+    except Exception:
+        pass
     print(f"  Annual Return: {results['annualReturn']:.2f}%")
     print(f"Calculation completed in {calculation_time:.2f} seconds")
     
@@ -289,7 +313,9 @@ def main():
                 'beta': 0.85,
                 'maxDrawdown': 15.3,
                 'sortinoRatio': 1.2,
-                'downsideDeviation': 10.5
+                'downsideDeviation': 10.5,
+                'treynorRatio': 0.1,
+                'calmarRatio': 0.86,
             }
         }
         

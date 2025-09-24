@@ -907,7 +907,7 @@ app.post('/api/calculate-risk-metrics', async (req, res) => {
         }))
       },
       lookbackYears: 5, // Default lookback for risk metrics
-      calculateMetrics: ['volatility', 'sharpe_ratio', 'beta', 'max_drawdown', 'sortino_ratio']
+      calculateMetrics: ['volatility', 'sharpe_ratio', 'beta', 'max_drawdown', 'sortino_ratio', 'treynor_ratio', 'calmar_ratio']
     };
     
     // Write input file
@@ -943,7 +943,9 @@ app.post('/api/calculate-risk-metrics', async (req, res) => {
               beta: 0.85,
               maxDrawdown: 15.3,
               sortinoRatio: 1.2,
-              downsideDeviation: 10.5
+              downsideDeviation: 10.5,
+              treynorRatio: 0.1,
+              calmarRatio: 0.86
             },
             message: 'Used fallback values due to calculation error'
           });
@@ -990,7 +992,9 @@ app.post('/api/calculate-risk-metrics', async (req, res) => {
             beta: 0.85,
             maxDrawdown: 15.3,
             sortinoRatio: 1.2,
-            downsideDeviation: 10.5
+            downsideDeviation: 10.5,
+            treynorRatio: 0.1,
+            calmarRatio: 0.86
           },
           message: 'Used fallback values due to processing error'
         });

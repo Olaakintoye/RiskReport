@@ -518,7 +518,6 @@ export default function DashboardScreen() {
       factorAttribution: {
         equity: scenario.impactValue * 5000,
         rates: scenario.impactValue * 2000,
-        credit: scenario.impactValue * 1500,
         fx: scenario.impactValue * 1000,
         commodity: scenario.impactValue * 500,
       },

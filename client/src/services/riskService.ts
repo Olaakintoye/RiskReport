@@ -89,6 +89,8 @@ export interface RiskMetrics {
   beta: number;
   sortinoRatio: number;
   downsideDeviation: number;
+  treynorRatio?: number;
+  calmarRatio?: number | null;
 }
 
 export interface DistributionAssumption {
@@ -542,6 +544,8 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
             beta: data.results.beta || 0.85,
             sortinoRatio: data.results.sortinoRatio || 1.2,
             downsideDeviation: data.results.downsideDeviation || 10.5,
+            treynorRatio: data.results.treynorRatio ?? undefined,
+            calmarRatio: data.results.calmarRatio ?? null,
           };
         }
       }
@@ -558,6 +562,8 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
     beta: parseFloat((0.85).toFixed(2)),         // 0.85 (< 1 means less volatile than market)
     sortinoRatio: parseFloat((1.2).toFixed(2)),    // 1.2 (> 1 is good)
     downsideDeviation: parseFloat((10.5).toFixed(2)), // 10.50%
+    treynorRatio: 0.1,
+    calmarRatio: 0.8,
   };
 };
 

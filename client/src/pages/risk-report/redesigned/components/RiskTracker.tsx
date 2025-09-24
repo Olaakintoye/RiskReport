@@ -56,6 +56,8 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
     maxDrawdown?: number;
     sharpeMin?: number;
     sortinoMin?: number;
+    treynorMin?: number;
+    calmarMin?: number;
   }>({});
   const [latestDbMetrics, setLatestDbMetrics] = useState<{
     var95?: number | null;
@@ -80,6 +82,8 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
           maxDrawdown: rp.max_drawdown_limit,
           sharpeMin: rp.sharpe_min,
           sortinoMin: rp.sortino_min,
+          treynorMin: rp.treynor_min,
+          calmarMin: rp.calmar_min,
         });
       } catch (e) {
         // best-effort; keep defaults
@@ -117,6 +121,8 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
       beta: lm?.beta ?? (rm ? rm.beta : null),
       maxDrawdown: lm?.maxDrawdown ?? (rm ? rm.maxDrawdown : null),
       sortinoRatio: rm ? rm.sortinoRatio : null,
+      treynorRatio: rm?.treynorRatio ?? null,
+      calmarRatio: rm?.calmarRatio ?? null,
     };
   }, [riskMetrics, latestDbMetrics, varResults]);
 
@@ -133,6 +139,8 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
     const ddLimit = customThresholds.maxDrawdown ?? 15.0; // %
     const sharpeMin = customThresholds.sharpeMin ?? 1.0;
     const sortinoMin = customThresholds.sortinoMin ?? 1.0;
+    const treynorMin = customThresholds.treynorMin ?? 0.05; // annual excess return per beta unit
+    const calmarMin = customThresholds.calmarMin ?? 0.5; // annual return divided by max drawdown
 
     const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -142,16 +150,20 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
     const ddComponent = clamp01(1 - (m.maxDrawdown as number) / ddLimit);
     const sharpeComponent = clamp01((m.sharpeRatio as number) / sharpeMin);
     const sortinoComponent = m.sortinoRatio != null ? clamp01((m.sortinoRatio as number) / sortinoMin) : 0.5;
+    const treynorComponent = m.treynorRatio != null ? clamp01((m.treynorRatio as number) / Math.max(0.0001, treynorMin)) : 0.5;
+    const calmarComponent = m.calmarRatio != null ? clamp01((m.calmarRatio as number) / Math.max(0.0001, calmarMin)) : 0.5;
     const betaComponent = clamp01(1 - Math.abs((m.beta as number) - 1.0) / 0.5); // full score within ±0.0; 0 at ±0.5
 
     // Weights sum to 100
     const weights = {
-      var: 25,
-      vol: 15,
-      dd: 20,
-      sharpe: 20,
-      sortino: 10,
-      beta: 10,
+      var: 22,
+      vol: 12,
+      dd: 18,
+      sharpe: 16,
+      sortino: 8,
+      beta: 8,
+      treynor: 8,
+      calmar: 8,
     };
 
     const weighted = (
@@ -160,7 +172,9 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
       ddComponent * weights.dd +
       sharpeComponent * weights.sharpe +
       sortinoComponent * weights.sortino +
-      betaComponent * weights.beta
+      betaComponent * weights.beta +
+      treynorComponent * weights.treynor +
+      calmarComponent * weights.calmar
     ) / 100;
 
     return Math.round(clamp01(weighted) * 100);
@@ -184,12 +198,16 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
     const dd = m.maxDrawdown ?? 0;
     const sharpe = m.sharpeRatio ?? 0;
     const sortino = m.sortinoRatio ?? 0;
+    const treynor = m.treynorRatio ?? 0;
+    const calmar = m.calmarRatio ?? 0;
 
     const varLimit = customThresholds.var95 ?? 5.0;
     const volLimit = customThresholds.volatility ?? 20.0;
     const ddLimit = customThresholds.maxDrawdown ?? 15.0;
     const sharpeMin = customThresholds.sharpeMin ?? 1.0;
     const sortinoMin = customThresholds.sortinoMin ?? 1.0;
+    const treynorMin = customThresholds.treynorMin ?? 0.05;
+    const calmarMin = customThresholds.calmarMin ?? 0.5;
 
     return [
       {
@@ -231,45 +249,72 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
         unit: '',
         status: sortino < Math.min(0.5, sortinoMin * 0.5) ? 'danger' : sortino < sortinoMin ? 'warning' : 'safe',
         description: 'Downside risk-adjusted return (higher is better)'
+      },
+      {
+        metricName: 'Treynor Ratio (min)',
+        thresholdValue: treynorMin,
+        currentValue: treynor,
+        unit: '',
+        status: treynor < Math.min(0.025, treynorMin * 0.5) ? 'danger' : treynor < treynorMin ? 'warning' : 'safe',
+        description: "Excess return per unit of systematic risk (beta)"
+      },
+      {
+        metricName: 'Calmar Ratio (min)',
+        thresholdValue: calmarMin,
+        currentValue: calmar,
+        unit: '',
+        status: calmar < Math.min(0.25, calmarMin * 0.5) ? 'danger' : calmar < calmarMin ? 'warning' : 'safe',
+        description: 'Return per unit of maximum drawdown risk (higher is better)'
       }
     ];
   };
 
   // Get risk score details
   const getRiskScoreDetails = (): RiskScoreDetail[] => {
-    if (!riskMetrics || !varResults) return [];
+    const m = effectiveMetrics;
+    if (!m || m.var95 == null || m.volatility == null || m.sharpeRatio == null || m.beta == null || m.maxDrawdown == null) {
+      return [];
+    }
+
+    const varLimit = customThresholds.var95 ?? 5.0;
+    const volLimit = customThresholds.volatility ?? 20.0;
+    const ddLimit = customThresholds.maxDrawdown ?? 15.0;
+    const sharpeMin = customThresholds.sharpeMin ?? 1.0;
+    const sortinoMin = customThresholds.sortinoMin ?? 1.0;
+    const treynorMin = customThresholds.treynorMin ?? 0.05;
+    const calmarMin = customThresholds.calmarMin ?? 0.5;
+
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+    const varComponent = clamp01(1 - (m.var95 as number) / varLimit);
+    const volComponent = clamp01(1 - (m.volatility as number) / volLimit);
+    const ddComponent = clamp01(1 - (m.maxDrawdown as number) / ddLimit);
+    const sharpeComponent = clamp01((m.sharpeRatio as number) / sharpeMin);
+    const sortinoComponent = m.sortinoRatio != null ? clamp01((m.sortinoRatio as number) / sortinoMin) : 0.5;
+    const treynorComponent = m.treynorRatio != null ? clamp01((m.treynorRatio as number) / Math.max(0.0001, treynorMin)) : 0.5;
+    const calmarComponent = m.calmarRatio != null ? clamp01((m.calmarRatio as number) / Math.max(0.0001, calmarMin)) : 0.5;
+    const betaComponent = clamp01(1 - Math.abs((m.beta as number) - 1.0) / 0.5);
+
+    const weights = {
+      var: 22,
+      vol: 12,
+      dd: 18,
+      sharpe: 16,
+      sortino: 8,
+      beta: 8,
+      treynor: 8,
+      calmar: 8,
+    };
 
     return [
-      {
-        category: 'Downside Protection',
-        score: Math.round(Math.max(0, 25 - (varResults.varPercentage * 2.5))),
-        maxScore: 25,
-        description: 'How well the portfolio is protected against losses'
-      },
-      {
-        category: 'Volatility Management',
-        score: Math.round(Math.max(0, 20 - (riskMetrics.volatility * 0.8))),
-        maxScore: 20,
-        description: 'How stable the portfolio returns are over time'
-      },
-      {
-        category: 'Reward/Risk Efficiency',
-        score: Math.round(Math.min(20, riskMetrics.sharpeRatio * 10)),
-        maxScore: 20,
-        description: 'How efficiently the portfolio generates returns for the risk taken'
-      },
-      {
-        category: 'Market Correlation',
-        score: Math.round(Math.max(0, 15 - (Math.abs(riskMetrics.beta - 1.0) * 10))),
-        maxScore: 15,
-        description: 'How well the portfolio balances market exposure'
-      },
-      {
-        category: 'Drawdown Control',
-        score: Math.round(Math.max(0, 20 - (riskMetrics.maxDrawdown * 0.8))),
-        maxScore: 20,
-        description: 'How well the portfolio limits significant declines'
-      }
+      { category: 'Downside Protection (VaR)', score: Math.round(varComponent * weights.var), maxScore: weights.var, description: 'Loss containment at 95% confidence' },
+      { category: 'Volatility Management', score: Math.round(volComponent * weights.vol), maxScore: weights.vol, description: 'Stability of returns' },
+      { category: 'Drawdown Control', score: Math.round(ddComponent * weights.dd), maxScore: weights.dd, description: 'Limiting peak-to-trough declines' },
+      { category: 'Reward/Risk (Sharpe)', score: Math.round(sharpeComponent * weights.sharpe), maxScore: weights.sharpe, description: 'Return per unit of total risk' },
+      { category: 'Downside Efficiency (Sortino)', score: Math.round(sortinoComponent * weights.sortino), maxScore: weights.sortino, description: 'Return per unit of downside risk' },
+      { category: 'Market Alignment (Beta)', score: Math.round(betaComponent * weights.beta), maxScore: weights.beta, description: 'Appropriate market sensitivity' },
+      { category: 'Systematic Efficiency (Treynor)', score: Math.round(treynorComponent * weights.treynor), maxScore: weights.treynor, description: 'Excess return per unit beta' },
+      { category: 'Return vs Drawdown (Calmar)', score: Math.round(calmarComponent * weights.calmar), maxScore: weights.calmar, description: 'Return per unit of max drawdown' },
     ];
   };
 
@@ -343,9 +388,11 @@ const RiskTracker: React.FC<RiskTrackerProps> = ({
       return Math.min(100, Math.max(0, (current / limit) * 100));
     }
     
-    // For metrics where higher is better (Sharpe, Sortino ratios)
+    // For metrics where higher is better (Sharpe, Sortino, Treynor, Calmar)
     if (threshold.metricName.includes('Sharpe') || 
-        threshold.metricName.includes('Sortino')) {
+        threshold.metricName.includes('Sortino') ||
+        threshold.metricName.includes('Treynor') ||
+        threshold.metricName.includes('Calmar')) {
       // For minimums: if we're above the minimum, show 100% (full bar = good)
       // If below minimum, show proportional fill
       if (current >= limit) {
