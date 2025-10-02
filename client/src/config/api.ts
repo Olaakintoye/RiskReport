@@ -11,7 +11,7 @@ function deriveFromDebuggerHost(): string | null {
       // host may be like "192.168.1.100:19000" or "localhost:19000"
       const ip = host.split(':')[0];
       if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-        return `http://${ip}:3000`;
+        return `http://${ip}:3001`;
       }
     }
   } catch {}
@@ -51,12 +51,20 @@ const envBase = process.env.EXPO_PUBLIC_API_BASE || process.env.API_BASE;
 const derivedBase = deriveFromDebuggerHost();
 const extraBase = fromExtra();
 
+// Debug: Log what values we're getting
+console.log('🔍 API Configuration Debug:');
+console.log('  envBase:', envBase || 'not set');
+console.log('  derivedBase:', derivedBase || 'not set');
+console.log('  extraBase:', extraBase || 'not set');
+
 // Prefer the live packager host IP over a possibly stale app.json extra.apiBase
 export const API_BASE: string =
   (envBase as string) ||
   (derivedBase as string) ||
   (extraBase as string) ||
-  (Platform.select({ web: 'http://localhost:3000', default: 'http://localhost:3000' }) as string);
+  (Platform.select({ web: 'http://localhost:3001', default: 'http://localhost:3001' }) as string);
+
+console.log('  ✅ Final API_BASE:', API_BASE);
 
 // Dedicated base for the Stress Test server (runs on port 3000)
 const envStressBase = process.env.EXPO_PUBLIC_STRESS_BASE || process.env.STRESS_BASE;

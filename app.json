@@ -64,8 +64,8 @@
       "router": {
         "origin": false
       },
-      "apiBase": "https://risktest1-production.up.railway.app",
-      "stressBase": "https://risktest1-production.up.railway.app",
+      "apiBase": "http://localhost:3001",
+      "stressBase": "http://localhost:3000",
       "eas": {
         "projectId": "52d31adc-11b2-4615-8dda-ba54f2e67eb8"
       }
