@@ -158,6 +158,45 @@ def historical_var(portfolio_returns, portfolio_value, confidence_level, time_ho
     
     return var, cvar, losses
 
+def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5):
+    """
+    Wrapper function for API compatibility
+    Calculates VaR for a portfolio given as a list of asset dictionaries
+    """
+    try:
+        # Convert portfolio_assets to DataFrame
+        portfolio_df = pd.DataFrame(portfolio_assets)
+        
+        # Get symbols and fetch price data
+        symbols = portfolio_df['symbol'].tolist()
+        price_data = get_historical_prices(symbols, years=lookback_years)
+        
+        # Calculate portfolio returns
+        portfolio_returns = calculate_portfolio_returns(portfolio_df, price_data)
+        
+        # Calculate portfolio value
+        portfolio_value = (portfolio_df['quantity'] * portfolio_df['price']).sum()
+        
+        # Calculate VaR
+        var, cvar, losses = historical_var(portfolio_returns, portfolio_value, confidence, horizon)
+        
+        # Return results in standard format
+        return {
+            'results': {
+                'var': var,
+                'cvar': cvar,
+                'portfolio_value': portfolio_value,
+                'var_percentage': (var / portfolio_value) * 100,
+                'confidence_level': confidence,
+                'time_horizon': horizon,
+                'lookback_years': lookback_years
+            },
+            'chart_url': ''
+        }
+    except Exception as e:
+        logger.error(f"Error in calculate_var: {e}")
+        raise
+
 def main():
     # Check for input file argument
     input_file = None

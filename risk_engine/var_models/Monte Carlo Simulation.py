@@ -235,6 +235,55 @@ def monte_carlo_var_cholesky(asset_returns, weights, current_value, confidence_l
     
     return var, cvar, portfolio_losses, current_value, stats, correlation_matrix
 
+def calculate_var(portfolio_assets, confidence=0.95, horizon=1, n_simulations=50000, lookback_years=5):
+    """
+    Wrapper function for API compatibility
+    Calculates VaR for a portfolio given as a list of asset dictionaries using Monte Carlo simulation
+    """
+    try:
+        # Convert portfolio_assets to DataFrame
+        portfolio_df = pd.DataFrame(portfolio_assets)
+        
+        # Get symbols and fetch price data
+        symbols = portfolio_df['symbol'].tolist()
+        price_data = get_historical_prices(symbols, years=lookback_years)
+        
+        # Calculate asset returns
+        asset_returns = price_data.pct_change().dropna()
+        
+        # Calculate weights based on current positions
+        portfolio_value = (portfolio_df['quantity'] * portfolio_df['price']).sum()
+        weights = (portfolio_df['quantity'] * portfolio_df['price']) / portfolio_value
+        weights = weights.values
+        
+        # Calculate VaR using Cholesky method
+        var, cvar, portfolio_losses, current_value, stats, correlation_matrix = monte_carlo_var_cholesky(
+            asset_returns,
+            weights,
+            portfolio_value,
+            confidence,
+            horizon,
+            n_simulations
+        )
+        
+        # Return results in standard format
+        return {
+            'results': {
+                'var': var,
+                'cvar': cvar,
+                'portfolio_value': portfolio_value,
+                'var_percentage': (var / portfolio_value) * 100,
+                'confidence_level': confidence,
+                'time_horizon': horizon,
+                'num_simulations': n_simulations,
+                'lookback_years': lookback_years
+            },
+            'chart_url': ''
+        }
+    except Exception as e:
+        logger.error(f"Error in calculate_var: {e}")
+        raise
+
 def main():
     # Check for input file argument
     input_file = None
