@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Risk Engine (Python FastAPI)
+  risk-engine:
+    build:
+      context: ./risk_engine
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=https://qlyqxlzlxdqboxpxpdjp.supabase.co
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - TIINGO_API_KEY=${TIINGO_API_KEY}
+      - PORT=8000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./risk_engine:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+
+  # Legacy Node.js Server (Optional)
+  legacy-server:
+    build:
+      context: ./server
+      dockerfile: ../Dockerfile.legacy
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - RISK_ENGINE_URL=http://risk-engine:8000
+      - SUPABASE_URL=https://qlyqxlzlxdqboxpxpdjp.supabase.co
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFseXF4bHpseGRxYm94cHhwZGpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAxMTkwNzMsImV4cCI6MjA2NTY5NTA3M30.lHXOj3_co_4GPLqPyFKr64jfz3V7qPYc6St7-SiNbaM
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    restart: unless-stopped
+    depends_on:
+      - risk-engine
+
+  # Redis for caching and job queues
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - risk-engine
+      - legacy-server
+    restart: unless-stopped
+
+volumes:
+  redis_data:
