@@ -2,8 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "risk_engine/Dockerfile",
-    "watchPatterns": ["risk_engine/**"]
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "startCommand": "uvicorn app_wrapper:app --host 0.0.0.0 --port $PORT",
