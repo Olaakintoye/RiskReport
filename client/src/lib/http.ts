@@ -22,7 +22,7 @@ http.interceptors.request.use((config) => {
 });
 
 export async function healthCheck(timeoutMs: number = 5000) {
-  return http.get('/api/status', { timeout: timeoutMs, headers: { 'Accept': 'application/json' } });
+  return http.get('/health', { timeout: timeoutMs, headers: { 'Accept': 'application/json' } });
 }
 
 function isTransientNetworkError(error: any): boolean {
