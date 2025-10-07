@@ -24,6 +24,10 @@ COPY risk_engine/ .
 # Ensure var_models directory exists with all Python files
 RUN mkdir -p var_models
 
+# Copy and set executable permission for start script
+COPY risk_engine/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
@@ -35,5 +39,5 @@ EXPOSE 8000
 # Health check - Railway will check when the port is ready
 # No need for explicit healthcheck as Railway detects when port is listening
 
-# Run uvicorn directly - Railway sets PORT environment variable
-CMD ["sh", "-c", "uvicorn app_wrapper:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run uvicorn via start script - properly handles PORT environment variable
+CMD ["/app/start.sh"]
