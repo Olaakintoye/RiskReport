@@ -143,8 +143,13 @@ def calculate_portfolio_returns(portfolio, price_data):
     # Calculate returns
     returns = price_data[symbols].pct_change().dropna()
     
-    # Combine using dot product
-    portfolio_returns = returns.dot(weights)
+    # Handle single asset case
+    if len(symbols) == 1:
+        # For single asset, just return the returns series (weights are 100%)
+        portfolio_returns = returns[symbols[0]]
+    else:
+        # Combine using dot product for multiple assets
+        portfolio_returns = returns.dot(weights)
     
     return portfolio_returns
 
