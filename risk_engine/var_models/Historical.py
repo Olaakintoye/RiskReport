@@ -83,16 +83,23 @@ def get_historical_prices(symbols, years=5):
         # Fetch data for all symbols at once
         data = yf.download(symbols, start=start_date, end=end_date, progress=False)['Adj Close']
         
+        # yfinance returns Series for single symbol, DataFrame for multiple symbols
+        # Convert Series to DataFrame for consistent handling
+        if isinstance(data, pd.Series):
+            logger.info(f"Single symbol detected, converting Series to DataFrame")
+            data = pd.DataFrame({symbols[0] if isinstance(symbols, list) else symbols: data})
+        
         # Check for missing data
-        missing_pct = data.isna().mean().mean() * 100
-        if missing_pct > 5:
-            logger.warning(f"Warning: {missing_pct:.1f}% of price data is missing")
+        if isinstance(data, pd.DataFrame):
+            missing_pct = data.isna().mean().mean() * 100
+            if missing_pct > 5:
+                logger.warning(f"Warning: {missing_pct:.1f}% of price data is missing")
         
         # Forward fill missing values (more appropriate for price data than mean)
         data = data.fillna(method='ffill')
         
         # If any columns are still completely empty, drop them
-        if data.isna().any().any():
+        if isinstance(data, pd.DataFrame) and data.isna().any().any():
             empty_symbols = data.columns[data.isna().all()].tolist()
             if empty_symbols:
                 logger.warning(f"No data available for symbols: {empty_symbols}")
