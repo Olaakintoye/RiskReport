@@ -96,7 +96,7 @@ def get_historical_prices(symbols, years=5):
                 logger.warning(f"Warning: {missing_pct:.1f}% of price data is missing")
         
         # Forward fill missing values (more appropriate for price data than mean)
-        data = data.fillna(method='ffill')
+        data = data.ffill()
         
         # If any columns are still completely empty, drop them
         if isinstance(data, pd.DataFrame) and data.isna().any().any():

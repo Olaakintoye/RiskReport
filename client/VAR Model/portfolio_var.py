@@ -107,7 +107,7 @@ def get_historical_data(symbols, years=3):
     price_data = pd.DataFrame(prices)
     
     # Fill any missing values with forward fill then backward fill
-    price_data = price_data.fillna(method='ffill').fillna(method='bfill')
+    price_data = price_data.ffill().bfill()
     
     print(f"Final price data shape: {price_data.shape}")
     return price_data

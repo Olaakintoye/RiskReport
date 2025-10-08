@@ -41,7 +41,7 @@ def get_historical_prices(symbols, years=5):
             data = pd.DataFrame({symbols[0]: data})
         
         # Forward fill missing values
-        data = data.fillna(method='ffill')
+        data = data.ffill()
         
         # Drop any completely empty columns
         data = data.dropna(axis=1, how='all')
