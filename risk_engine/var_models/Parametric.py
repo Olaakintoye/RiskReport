@@ -10,6 +10,9 @@ import sys
 import os
 import logging
 
+# Import market data helper for fallback fetching
+from market_data_helper import get_historical_prices_with_fallback
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('parametric_var')
@@ -76,42 +79,20 @@ def load_portfolio_from_api(api_url):
 
 def get_historical_prices(symbols, years=5):
     """
-    Get historical prices for the given symbols with proper error handling
-    and data quality checks.
+    Get historical prices using fallback strategy (Tiingo -> yfinance -> synthetic).
     """
     # Validate lookback period
     years = max(MIN_LOOKBACK, min(MAX_LOOKBACK, years))
     
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=int(years*365.25))  # More precise year calculation
-    
-    logger.info(f"Fetching historical prices from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')} ({years} years)")
-    
     try:
-        # Fetch data for all symbols at once
-        data = yf.download(symbols, start=start_date, end=end_date, progress=False)['Adj Close']
+        # Use helper with fallback strategy
+        data = get_historical_prices_with_fallback(symbols, years)
         
-        # yfinance returns Series for single symbol, DataFrame for multiple symbols
-        # Convert Series to DataFrame for consistent handling
-        if isinstance(data, pd.Series):
-            logger.info(f"Single symbol detected, converting Series to DataFrame")
-            data = pd.DataFrame({symbols[0] if isinstance(symbols, list) else symbols: data})
-        
-        # Check for missing data
+        # Check data quality
         if isinstance(data, pd.DataFrame):
             missing_pct = data.isna().mean().mean() * 100
             if missing_pct > 5:
                 logger.warning(f"Warning: {missing_pct:.1f}% of price data is missing")
-        
-        # Forward fill missing values (more appropriate for price data than mean)
-        data = data.ffill()
-        
-        # If any columns are still completely empty, drop them
-        if isinstance(data, pd.DataFrame) and data.isna().any().any():
-            empty_symbols = data.columns[data.isna().all()].tolist()
-            if empty_symbols:
-                logger.warning(f"No data available for symbols: {empty_symbols}")
-                data = data.drop(columns=empty_symbols)
         
         # Ensure we have enough data
         if len(data) < 252:  # Approximately 1 year of trading days
@@ -257,6 +238,10 @@ def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5
         # Calculate portfolio value
         portfolio_value = (portfolio_df['quantity'] * portfolio_df['price']).sum()
         
+        # Validate we have enough data
+        if len(portfolio_returns) < 30:
+            raise ValueError(f"Insufficient data for VaR calculation: only {len(portfolio_returns)} data points")
+        
         # Calculate VaR
         var, cvar, simulated_losses, dist_stats = parametric_var(
             portfolio_returns,
@@ -266,18 +251,26 @@ def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5
             distribution=distribution
         )
         
+        # Sanitize results to prevent JSON serialization errors
+        def sanitize_float(value):
+            """Convert NaN/Inf to None for JSON serialization"""
+            if value is None or np.isnan(value) or np.isinf(value):
+                return 0.0  # Return 0 instead of None to maintain numeric type
+            return float(value)
+        
         # Return results in standard format
         return {
             'results': {
-                'var': var,
-                'cvar': cvar,
-                'portfolio_value': portfolio_value,
-                'var_percentage': (var / portfolio_value) * 100,
+                'var': sanitize_float(var),
+                'cvar': sanitize_float(cvar),
+                'portfolio_value': sanitize_float(portfolio_value),
+                'var_percentage': sanitize_float((var / portfolio_value) * 100 if portfolio_value > 0 else 0),
                 'confidence_level': confidence,
                 'time_horizon': horizon,
                 'lookback_years': lookback_years,
                 'distribution': distribution,
-                'stats': dist_stats
+                'stats': {k: sanitize_float(v) if isinstance(v, (int, float)) else v 
+                         for k, v in dist_stats.items()}
             },
             'chart_url': ''
         }

@@ -11,6 +11,9 @@ import sys
 import os
 import logging
 
+# Import market data helper for fallback fetching
+from market_data_helper import get_historical_prices_with_fallback
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('monte_carlo_var')
@@ -81,42 +84,20 @@ def load_portfolio_from_api(api_url):
 
 def get_historical_prices(symbols, years=5):
     """
-    Get historical prices for the given symbols with proper error handling
-    and data quality checks.
+    Get historical prices using fallback strategy (Tiingo -> yfinance -> synthetic).
     """
     # Validate lookback period
     years = max(MIN_LOOKBACK, min(MAX_LOOKBACK, years))
     
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=int(years*365.25))  # More precise year calculation
-    
-    logger.info(f"Fetching historical prices from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')} ({years} years)")
-    
     try:
-        # Fetch data for all symbols at once
-        data = yf.download(symbols, start=start_date, end=end_date, progress=False)['Adj Close']
+        # Use helper with fallback strategy
+        data = get_historical_prices_with_fallback(symbols, years)
         
-        # yfinance returns Series for single symbol, DataFrame for multiple symbols
-        # Convert Series to DataFrame for consistent handling
-        if isinstance(data, pd.Series):
-            logger.info(f"Single symbol detected, converting Series to DataFrame")
-            data = pd.DataFrame({symbols[0] if isinstance(symbols, list) else symbols: data})
-        
-        # Check for missing data
+        # Check data quality
         if isinstance(data, pd.DataFrame):
             missing_pct = data.isna().mean().mean() * 100
             if missing_pct > 5:
                 logger.warning(f"Warning: {missing_pct:.1f}% of price data is missing")
-        
-        # Forward fill missing values (more appropriate for price data than mean)
-        data = data.ffill()
-        
-        # If any columns are still completely empty, drop them
-        if isinstance(data, pd.DataFrame) and data.isna().any().any():
-            empty_symbols = data.columns[data.isna().all()].tolist()
-            if empty_symbols:
-                logger.warning(f"No data available for symbols: {empty_symbols}")
-                data = data.drop(columns=empty_symbols)
         
         # Ensure we have enough data
         if len(data) < 252:  # Approximately 1 year of trading days
