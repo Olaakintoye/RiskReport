@@ -9,6 +9,12 @@ import sys
 import os
 import logging
 
+# Import market data helper for fallback fetching
+try:
+    from .market_data_helper import get_historical_prices_with_fallback
+except ImportError:
+    from market_data_helper import get_historical_prices_with_fallback
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('historical_var')
