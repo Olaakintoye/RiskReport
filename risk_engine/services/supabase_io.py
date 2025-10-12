@@ -10,11 +10,16 @@ from typing import Dict, Any, List, Optional
 import logging
 from datetime import datetime
 import json
+import base64
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 class SupabaseService:
     """Service for Supabase database operations"""
+    
+    # Storage bucket name for VaR charts
+    VAR_CHARTS_BUCKET = "var-charts"
     
     def __init__(self):
         self.client: Optional[Client] = None
@@ -28,6 +33,7 @@ class SupabaseService:
             try:
                 self.client = create_client(self.url, self.service_key)
                 logger.info("Supabase client initialized successfully")
+                logger.info(f"Storage bucket configured: {self.VAR_CHARTS_BUCKET}")
             except Exception as e:
                 logger.error(f"Failed to initialize Supabase client: {e}")
     
@@ -291,6 +297,223 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Error fetching market data: {e}")
             raise
+    
+    async def batch_update_market_data(self, market_data: List[Dict[str, Any]]):
+        """Batch update market data for multiple symbols"""
+        try:
+            # Prepare data with timestamps
+            now = datetime.utcnow().isoformat()
+            data_to_upsert = []
+            
+            for item in market_data:
+                data_to_upsert.append({
+                    "symbol": item["symbol"],
+                    "last_price": item.get("last_price"),
+                    "price_change": item.get("price_change"),
+                    "price_change_pct": item.get("price_change_pct"),
+                    "volume": item.get("volume"),
+                    "market_cap": item.get("market_cap"),
+                    "currency": item.get("currency", "USD"),
+                    "exchange": item.get("exchange"),
+                    "last_updated": now
+                })
+            
+            # Batch upsert
+            self.client.table("market_data_cache").upsert(data_to_upsert).execute()
+            
+            logger.info(f"Batch updated market data for {len(data_to_upsert)} symbols")
+            
+        except Exception as e:
+            logger.error(f"Error batch updating market data: {e}")
+            raise
+    
+    async def get_stale_symbols(self, portfolio_id: str, max_age_minutes: int = 5) -> List[Dict[str, Any]]:
+        """Get symbols that need price refresh for a portfolio"""
+        try:
+            # Call the Postgres function
+            response = self.client.rpc('get_stale_symbols', {
+                'p_portfolio_id': portfolio_id,
+                'p_max_age_minutes': max_age_minutes
+            }).execute()
+            
+            return response.data
+            
+        except Exception as e:
+            logger.error(f"Error getting stale symbols: {e}")
+            raise
+    
+    async def refresh_portfolio_prices(self, portfolio_id: str) -> Dict[str, Any]:
+        """Refresh portfolio prices from market data cache"""
+        try:
+            # Call the Postgres function
+            response = self.client.rpc('refresh_portfolio_prices', {
+                'p_portfolio_id': portfolio_id
+            }).execute()
+            
+            updated_count = len(response.data) if response.data else 0
+            logger.info(f"Refreshed {updated_count} positions for portfolio {portfolio_id}")
+            
+            return {
+                'updated_count': updated_count,
+                'positions': response.data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error refreshing portfolio prices: {e}")
+            raise
+    
+    # =============================================
+    # STORAGE OPERATIONS
+    # =============================================
+    
+    async def upload_chart_to_storage(
+        self,
+        chart_base64: str,
+        user_id: str,
+        portfolio_id: str,
+        method: str
+    ) -> Optional[str]:
+        """
+        Upload VaR chart to Supabase Storage
+        
+        Args:
+            chart_base64: Base64-encoded PNG image
+            user_id: User ID for folder organization
+            portfolio_id: Portfolio ID
+            method: VaR method (parametric, historical, monte-carlo)
+        
+        Returns:
+            Public URL of uploaded chart, or None on error
+        """
+        try:
+            if not chart_base64:
+                logger.warning("No chart data provided for upload")
+                return None
+            
+            # Decode base64 to bytes
+            chart_bytes = base64.b64decode(chart_base64)
+            
+            # Create unique filename
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            filename = f"{user_id}/{portfolio_id}/{method}_{timestamp}.png"
+            
+            # Upload to storage
+            response = self.client.storage.from_(self.VAR_CHARTS_BUCKET).upload(
+                filename,
+                chart_bytes,
+                file_options={"content-type": "image/png", "upsert": "true"}
+            )
+            
+            # Get public URL
+            public_url = self.client.storage.from_(self.VAR_CHARTS_BUCKET).get_public_url(filename)
+            
+            logger.info(f"Chart uploaded successfully: {filename}")
+            return public_url
+            
+        except Exception as e:
+            logger.error(f"Error uploading chart to storage: {e}")
+            return None
+    
+    # =============================================
+    # RESULTS OPERATIONS
+    # =============================================
+    
+    async def save_var_result(
+        self,
+        portfolio_id: str,
+        calc_type: str,
+        var_data: Dict[str, Any],
+        chart_url: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Save VaR analysis result to database
+        
+        Args:
+            portfolio_id: Portfolio ID
+            calc_type: Calculation type (parametric, historical, monte_carlo)
+            var_data: Dictionary with VaR calculation results
+            chart_url: Supabase Storage URL for chart
+            user_id: User ID (optional, for logging)
+        
+        Returns:
+            Result ID or None on error
+        """
+        try:
+            # Extract values from var_data
+            results = var_data.get('results', var_data)
+            
+            # Prepare result data
+            result_data = {
+                'portfolio_id': portfolio_id,
+                'calc_type': calc_type,
+                'confidence': results.get('confidence_level', 0.95),
+                'horizon_days': results.get('time_horizon', 1),
+                'var_amount': results.get('var', 0),
+                'var_percentage': results.get('var_percentage', 0),
+                'es_amount': results.get('cvar', 0),  # Expected Shortfall
+                'cvar_percentage': results.get('cvar_percentage', 0),
+                'portfolio_value': results.get('portfolio_value', 0),
+                'chart_storage_url': chart_url,
+                'parameters': json.dumps({
+                    'confidence_level': results.get('confidence_level', 0.95),
+                    'time_horizon': results.get('time_horizon', 1),
+                    'lookback_years': results.get('lookback_years'),
+                    'num_simulations': results.get('num_simulations'),
+                    'distribution': results.get('distribution'),
+                    'timestamp': datetime.utcnow().isoformat()
+                }),
+                'created_at': datetime.utcnow().isoformat()
+            }
+            
+            # Insert into results table
+            response = self.client.table("results").insert(result_data).execute()
+            
+            if response.data:
+                result_id = response.data[0]['id']
+                logger.info(f"VaR result saved successfully: {result_id} for portfolio {portfolio_id}")
+                return result_id
+            else:
+                logger.error("No data returned from results insert")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error saving VaR result: {e}")
+            return None
+    
+    async def get_var_history(
+        self,
+        portfolio_id: str,
+        limit: int = 5,
+        calc_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get VaR analysis history for a portfolio
+        
+        Args:
+            portfolio_id: Portfolio ID
+            limit: Maximum number of results to return
+            calc_type: Optional filter by calculation type
+        
+        Returns:
+            List of VaR results, most recent first
+        """
+        try:
+            query = self.client.table("results") \
+                .select("*") \
+                .eq("portfolio_id", portfolio_id) \
+                .order("created_at", desc=True) \
+                .limit(limit)
+            
+            if calc_type:
+                query = query.eq("calc_type", calc_type)
+            
+            response = query.execute()
+            return response.data if response.data else []
+            
+        except Exception as e:
+            logger.error(f"Error fetching VaR history: {e}")
+            return []
     
     # =============================================
     # UTILITY FUNCTIONS

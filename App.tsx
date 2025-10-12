@@ -17,7 +17,22 @@ import API_BASE from './client/src/config/api';
 import OnboardingContainer from './client/src/components/onboarding/OnboardingContainer';
 import { AuthProvider, useAuth } from './client/src/hooks/use-auth';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes default stale time
+      gcTime: 10 * 60 * 1000, // 10 minutes garbage collection time
+      refetchOnWindowFocus: false, // Don't refetch on window focus by default
+      refetchOnMount: true, // Refetch on mount if data is stale
+      retry: 2, // Retry failed requests twice
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    },
+    mutations: {
+      retry: 1, // Retry mutations once
+      retryDelay: 2000,
+    },
+  },
+});
 
 function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(true);

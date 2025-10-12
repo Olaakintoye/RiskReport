@@ -218,7 +218,7 @@ const PositionRiskCard: React.FC<PositionRiskCardProps> = ({
               onPress={onViewMore}
             >
               <Text style={styles.viewMoreText}>See Details</Text>
-              <Ionicons name="chevron-forward" size={16} color="#007AFF" />
+              <Ionicons name="chevron-forward" size={16} color="#000000" />
             </TouchableOpacity>
           )}
         </View>
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   viewMoreText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#000000',
     marginRight: 4,
   },
   loadingContainer: {

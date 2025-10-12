@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { StressTestResult, structuredStressTestService } from '../../services/structuredStressTestService';
 import displayNameService from '../../services/displayNameService';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import CalculationExplanationModal from '../ui/CalculationExplanationModal';
+import calculationExplanationService from '../../services/calculationExplanationService';
+import { CalculationExplanation } from '../../services/calculationExplanationService';
 
 // ==========================================
 // ASSET BREAKDOWN CARD COMPONENT
@@ -283,6 +286,8 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
     scenarioName: '',
     portfolioName: ''
   });
+  const [showExplanationModal, setShowExplanationModal] = useState(false);
+  const [currentExplanation, setCurrentExplanation] = useState<CalculationExplanation | null>(null);
 
   // Load display names when results change
   useEffect(() => {
@@ -342,6 +347,51 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
       newExpanded.add(section);
     }
     setExpandedSections(newExpanded);
+  };
+
+  const showExplanation = (type: string, context?: any) => {
+    if (!results) return;
+    
+    let explanation: CalculationExplanation;
+    
+    try {
+      switch (type) {
+        case 'portfolio-impact':
+          explanation = calculationExplanationService.getPortfolioImpactExplanation(
+            results,
+            results.scenarioFactors
+          );
+          break;
+        case 'asset-class':
+          explanation = calculationExplanationService.getAssetClassImpactExplanation(
+            context,
+            results
+          );
+          break;
+        case 'factor':
+          explanation = calculationExplanationService.getFactorAttributionExplanation(
+            context,
+            results
+          );
+          break;
+        case 'factor-filtering':
+          const factorSummary = structuredStressTestService.calculateFactorImpactSummary(results.factorAttribution);
+          const totalFactors = 6; // equity, rates, credit, fx, commodity, volatility
+          const shownFactors = factorSummary.map(f => f.factor);
+          explanation = calculationExplanationService.getFactorFilteringExplanation(
+            shownFactors,
+            ['equity', 'rates', 'credit', 'fx', 'commodity', 'volatility']
+          );
+          break;
+        default:
+          return;
+      }
+      
+      setCurrentExplanation(explanation);
+      setShowExplanationModal(true);
+    } catch (error) {
+      console.error('Error generating explanation:', error);
+    }
   };
 
   const exportToPDF = async () => {
@@ -421,7 +471,15 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
               </Text>
             </View>
             <View style={[styles.impactRow, styles.totalImpactRow]}>
-              <Text style={styles.impactLabel}>Total Impact</Text>
+              <View style={styles.labelWithIcon}>
+                <Text style={styles.impactLabel}>Total Impact</Text>
+                <TouchableOpacity 
+                  onPress={() => showExplanation('portfolio-impact')}
+                  style={[styles.infoIcon, {backgroundColor: '#f0f9ff', padding: 8, borderRadius: 20}]}
+                >
+                  <Ionicons name="information-circle-outline" size={20} color="#1d4ed8" />
+                </TouchableOpacity>
+              </View>
               <View style={styles.impactValueContainer}>
                 <Ionicons name={impactIcon} size={20} color={impactColor} />
                 <Text style={[styles.impactValue, { color: impactColor }]}>
@@ -454,7 +512,15 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
           {Object.entries(results.assetClassImpacts).map(([assetClass, impact]) => (
             <View key={assetClass} style={styles.assetClassRow}>
               <View style={styles.assetClassHeader}>
-                <Text style={styles.assetClassName}>{assetClass}</Text>
+                <View style={styles.labelWithIcon}>
+                  <Text style={styles.assetClassName}>{assetClass}</Text>
+                  <TouchableOpacity 
+                    onPress={() => showExplanation('asset-class', assetClass)}
+                    style={[styles.infoIcon, {backgroundColor: '#f0f9ff', padding: 6, borderRadius: 15}]}
+                  >
+                    <Ionicons name="information-circle-outline" size={18} color="#1d4ed8" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.assetClassWeight}>
                   {((impact.weight || 0) * 100).toFixed(1)}%
                 </Text>
@@ -612,6 +678,8 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
     if (!results) return null;
 
     const factorSummary = structuredStressTestService.calculateFactorImpactSummary(results.factorAttribution);
+    const totalFactors = 6; // equity, rates, credit, fx, commodity, volatility
+    const shownFactors = factorSummary.length;
 
     return (
       <ScrollView style={styles.tabContent}>
@@ -620,10 +688,35 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
           <Text style={styles.cardSubtitle}>
             Breakdown of portfolio impact by risk factors
           </Text>
+          
+          {/* Relevance Notice */}
+          {shownFactors < totalFactors && (
+            <View style={styles.relevanceNotice}>
+              <Ionicons name="information-circle" size={16} color="#3b82f6" />
+              <Text style={styles.relevanceNoticeText}>
+                Showing {shownFactors} of {totalFactors} factors. Only factors relevant to your portfolio's asset classes are displayed.
+              </Text>
+              <TouchableOpacity 
+                onPress={() => showExplanation('factor-filtering')}
+                style={[styles.infoIcon, {backgroundColor: '#f0f9ff', padding: 6, borderRadius: 15}]}
+              >
+                <Ionicons name="information-circle-outline" size={18} color="#1d4ed8" />
+              </TouchableOpacity>
+            </View>
+          )}
+          
           {factorSummary.map((factor) => (
             <View key={factor.factor} style={styles.factorAttributionRow}>
               <View style={styles.factorHeader}>
-                <Text style={styles.factorName}>{typeof factor.factor === 'string' ? factor.factor.toUpperCase() : ''}</Text>
+                <View style={styles.labelWithIcon}>
+                  <Text style={styles.factorName}>{typeof factor.factor === 'string' ? factor.factor.toUpperCase() : ''}</Text>
+                  <TouchableOpacity 
+                    onPress={() => showExplanation('factor', factor.factor)}
+                    style={[styles.infoIcon, {backgroundColor: '#f0f9ff', padding: 6, borderRadius: 15}]}
+                  >
+                    <Ionicons name="information-circle-outline" size={18} color="#1d4ed8" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.factorPercentage}>{(factor.percentage || 0).toFixed(1)}%</Text>
               </View>
               <View style={styles.factorImpactContainer}>
@@ -777,6 +870,13 @@ const StressTestResultsPopup: React.FC<StressTestResultsPopupProps> = React.memo
           {renderContent()}
         </View>
       </View>
+      
+      {/* Calculation Explanation Modal */}
+      <CalculationExplanationModal
+        visible={showExplanationModal}
+        explanation={currentExplanation}
+        onClose={() => setShowExplanationModal(false)}
+      />
     </Modal>
   );
 });
@@ -1043,6 +1143,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
   },
+  relevanceNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  relevanceNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1e40af',
+    lineHeight: 16,
+  },
   factorAttributionRow: {
     paddingVertical: 8,
     borderBottomWidth: 1,
@@ -1305,6 +1420,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 16,
     fontStyle: 'italic',
+  },
+  // New styles for calculation explanation icons
+  labelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoIcon: {
+    padding: 2,
   },
 });
 

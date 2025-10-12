@@ -243,6 +243,12 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
     // Use the specific chart URL from VaR results if available, otherwise use generic path
     let finalPath = varResultChartUrl || imagePath;
     
+    // Check if it's a base64 data URI (from immediate display)
+    if (finalPath && finalPath.startsWith('data:image/')) {
+      // Return base64 data URI directly without modification
+      return finalPath;
+    }
+    
     // Check if the URL is already complete (starts with http:// or https://)
     if (finalPath && (finalPath.startsWith('http://') || finalPath.startsWith('https://'))) {
       // URL is already complete, just add cache busting parameter
@@ -621,7 +627,7 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
           {onViewMore && !detailed && (
             <TouchableOpacity style={styles.viewMoreButton} onPress={onViewMore}>
               <Text style={styles.viewMoreText}>See Details</Text>
-              <Ionicons name="chevron-forward" size={16} color="#007AFF" />
+              <Ionicons name="chevron-forward" size={16} color="#000000" />
             </TouchableOpacity>
           )}
         </View>
@@ -1206,7 +1212,7 @@ const styles = StyleSheet.create({
   },
   viewMoreText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#000000',
     marginRight: 4,
   },
   controlsRow: {

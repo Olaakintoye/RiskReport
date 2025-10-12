@@ -14,11 +14,6 @@ interface MarketData {
     relevance: number;
     timestamp: string;
   }>;
-  correlations: Array<{
-    index: string;
-    correlation: number;
-    trend: 'up' | 'down' | 'stable';
-  }>;
 }
 
 interface MarketContextCardProps {
@@ -72,11 +67,6 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
             timestamp: '6h ago'
           }
         ],
-        correlations: [
-          { index: 'SPX', correlation: 0.87, trend: 'up' },
-          { index: 'QQQ', correlation: 0.72, trend: 'stable' },
-          { index: 'IWM', correlation: 0.45, trend: 'down' }
-        ]
       };
       
       setMarketData(mockData);
@@ -208,33 +198,6 @@ const MarketContextCard: React.FC<MarketContextCardProps> = ({
         {selectedTab === 'news' && renderNews()}
       </ScrollView>
 
-      {/* Portfolio Correlations Summary */}
-      <View style={styles.correlationsSummary}>
-        <Text style={styles.correlationsTitle}>Portfolio Correlations</Text>
-        <View style={styles.correlationsContainer}>
-          {marketData.correlations.map((corr) => (
-            <View key={corr.index} style={styles.correlationItem}>
-              <Text style={styles.correlationIndex}>{corr.index}</Text>
-              <View style={styles.correlationValue}>
-                <Text style={styles.correlationNumber}>
-                  {corr.correlation.toFixed(2)}
-                </Text>
-                <MaterialCommunityIcons
-                  name={
-                    corr.trend === 'up' ? 'trending-up' :
-                    corr.trend === 'down' ? 'trending-down' : 'trending-neutral'
-                  }
-                  size={12}
-                  color={
-                    corr.trend === 'up' ? '#10b981' :
-                    corr.trend === 'down' ? '#ef4444' : '#64748b'
-                  }
-                />
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
     </View>
   );
 };
@@ -320,7 +283,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: {
-    maxHeight: 200,
+    maxHeight: 400,
   },
   positiveChange: {
     color: '#10b981',
@@ -406,40 +369,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1e293b',
     lineHeight: 20,
-  },
-  correlationsSummary: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-  },
-  correlationsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
-  },
-  correlationsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  correlationItem: {
-    alignItems: 'center',
-  },
-  correlationIndex: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  correlationValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  correlationNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
   },
 });
 

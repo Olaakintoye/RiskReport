@@ -136,7 +136,7 @@ const EnhancedPortfolioItem: React.FC<EnhancedPortfolioItemProps> = ({
             <MaterialCommunityIcons
               name={action.icon as any}
               size={14}
-              color="#3b82f6"
+              color="#000000"
             />
             <Text style={styles.quickActionText}>{action.label}</Text>
           </TouchableOpacity>
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     fontSize: 10,
-    color: '#3b82f6',
+    color: '#000000',
     fontWeight: '600',
     marginLeft: 4,
   },

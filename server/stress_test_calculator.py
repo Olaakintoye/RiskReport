@@ -34,42 +34,49 @@ class StressTestCalculator:
         self.correlation_matrix = self._initialize_correlation_matrix()
         
     def _initialize_asset_sensitivities(self) -> Dict[str, Dict[str, float]]:
-        """Initialize asset sensitivity database"""
+        """
+        Initialize asset sensitivity database
+        Enhanced with factor relevance - zeros out truly irrelevant factors
+        """
         return {
             'equity': {
-                'Technology': {'equity_beta': 1.3, 'rates_sensitivity': -0.8, 'credit_sensitivity': 0.4},
-                'Healthcare': {'equity_beta': 0.9, 'rates_sensitivity': -0.3, 'credit_sensitivity': 0.2},
-                'Financial': {'equity_beta': 1.4, 'rates_sensitivity': 0.6, 'credit_sensitivity': 0.8},
-                'Consumer Discretionary': {'equity_beta': 1.6, 'rates_sensitivity': -0.9, 'credit_sensitivity': 0.5},
-                'Consumer Staples': {'equity_beta': 0.7, 'rates_sensitivity': -0.2, 'credit_sensitivity': 0.1},
-                'Energy': {'equity_beta': 1.2, 'rates_sensitivity': 0.3, 'credit_sensitivity': 0.6},
-                'Materials': {'equity_beta': 1.1, 'rates_sensitivity': 0.2, 'credit_sensitivity': 0.4},
-                'Industrials': {'equity_beta': 1.0, 'rates_sensitivity': -0.1, 'credit_sensitivity': 0.3},
-                'Utilities': {'equity_beta': 0.6, 'rates_sensitivity': -0.7, 'credit_sensitivity': 0.1},
-                'Real Estate': {'equity_beta': 1.0, 'rates_sensitivity': -1.2, 'credit_sensitivity': 0.4},
-                'Telecommunications': {'equity_beta': 0.8, 'rates_sensitivity': -0.5, 'credit_sensitivity': 0.2},
-                'Diversified': {'equity_beta': 1.0, 'rates_sensitivity': -0.4, 'credit_sensitivity': 0.3}
+                'Technology': {'equity_beta': 1.3, 'rates_sensitivity': -0.8, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Healthcare': {'equity_beta': 0.9, 'rates_sensitivity': -0.3, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Financials': {'equity_beta': 1.4, 'rates_sensitivity': 0.6, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Consumer Discretionary': {'equity_beta': 1.6, 'rates_sensitivity': -0.9, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Consumer Staples': {'equity_beta': 0.7, 'rates_sensitivity': -0.2, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Energy': {'equity_beta': 1.2, 'rates_sensitivity': 0.3, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Materials': {'equity_beta': 1.1, 'rates_sensitivity': 0.2, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Industrials': {'equity_beta': 1.0, 'rates_sensitivity': -0.1, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Utilities': {'equity_beta': 0.6, 'rates_sensitivity': -0.7, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Real Estate': {'equity_beta': 1.0, 'rates_sensitivity': -1.2, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Telecommunications': {'equity_beta': 0.8, 'rates_sensitivity': -0.5, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Dividend': {'equity_beta': 0.85, 'rates_sensitivity': -0.4, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Diversified': {'equity_beta': 1.0, 'rates_sensitivity': -0.4, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0}
             },
             'bond': {
-                'Government Bonds': {'duration': 7.0, 'credit_sensitivity': 0.0, 'rates_sensitivity': 1.0},
-                'Corporate Bonds': {'duration': 5.0, 'credit_sensitivity': 0.8, 'rates_sensitivity': 0.9},
-                'High Yield': {'duration': 4.0, 'credit_sensitivity': 1.5, 'rates_sensitivity': 0.7},
-                'Municipal Bonds': {'duration': 6.0, 'credit_sensitivity': 0.3, 'rates_sensitivity': 0.9},
-                'Treasury Bills': {'duration': 0.25, 'credit_sensitivity': 0.0, 'rates_sensitivity': 1.0},
-                'Fixed Income': {'duration': 6.0, 'credit_sensitivity': 0.4, 'rates_sensitivity': 0.95}
+                'Government': {'duration': 7.0, 'credit_sensitivity': 0.0, 'rates_sensitivity': 1.0, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Corporate': {'duration': 5.0, 'credit_sensitivity': 0.8, 'rates_sensitivity': 0.9, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'High Yield': {'duration': 4.0, 'credit_sensitivity': 1.5, 'rates_sensitivity': 0.7, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Municipal Bonds': {'duration': 6.0, 'credit_sensitivity': 0.3, 'rates_sensitivity': 0.9, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Treasury Bills': {'duration': 0.25, 'credit_sensitivity': 0.0, 'rates_sensitivity': 1.0, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0},
+                'Fixed Income': {'duration': 6.0, 'credit_sensitivity': 0.4, 'rates_sensitivity': 0.95, 'equity_beta': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0}
             },
             'commodity': {
-                'Precious Metals': {'commodity_beta': 1.0, 'inflation_sensitivity': 0.8, 'fx_sensitivity': -0.6},
-                'Energy': {'commodity_beta': 1.5, 'inflation_sensitivity': 1.2, 'fx_sensitivity': -0.4},
-                'Agriculture': {'commodity_beta': 0.8, 'inflation_sensitivity': 0.6, 'fx_sensitivity': -0.3},
-                'Industrial Metals': {'commodity_beta': 1.2, 'inflation_sensitivity': 0.7, 'fx_sensitivity': -0.5},
-                'Commodities': {'commodity_beta': 1.0, 'inflation_sensitivity': 0.8, 'fx_sensitivity': -0.5}
+                'Precious Metals': {'commodity_beta': 1.0, 'fx_sensitivity': -0.6, 'equity_beta': 0.0, 'rates_sensitivity': 0.0, 'credit_sensitivity': 0.0},
+                'Energy': {'commodity_beta': 1.5, 'fx_sensitivity': -0.4, 'equity_beta': 0.0, 'rates_sensitivity': 0.0, 'credit_sensitivity': 0.0},
+                'Agriculture': {'commodity_beta': 0.8, 'fx_sensitivity': -0.3, 'equity_beta': 0.0, 'rates_sensitivity': 0.0, 'credit_sensitivity': 0.0},
+                'Industrial Metals': {'commodity_beta': 1.2, 'fx_sensitivity': -0.5, 'equity_beta': 0.0, 'rates_sensitivity': 0.0, 'credit_sensitivity': 0.0},
+                'Commodities': {'commodity_beta': 1.0, 'fx_sensitivity': -0.5, 'equity_beta': 0.0, 'rates_sensitivity': 0.0, 'credit_sensitivity': 0.0}
             },
-            'reit': {
-                'Real Estate': {'equity_beta': 1.0, 'rates_sensitivity': -1.5, 'credit_sensitivity': 0.6}
+            'real_estate': {
+                'Real Estate': {'equity_beta': 0.6, 'rates_sensitivity': -0.8, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0}
             },
             'cash': {
-                'Cash': {'rates_sensitivity': 0.1, 'credit_sensitivity': 0.0, 'equity_beta': 0.0}
+                'Cash': {'rates_sensitivity': 0.05, 'equity_beta': 0.0, 'credit_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0}
+            },
+            'alternative': {
+                'Alternative': {'equity_beta': 0.5, 'credit_sensitivity': 0.3, 'rates_sensitivity': 0.0, 'fx_sensitivity': 0.0, 'commodity_sensitivity': 0.0}
             }
         }
     
@@ -116,16 +123,20 @@ class StressTestCalculator:
         commodity_impact = 0
         
         if asset_type == 'equity':
-            # Equity assets are primarily affected by equity factor
+            # Equity assets are primarily affected by equity factor only
+            # Note: Volatility is NOT included because:
+            # - Volatility measures uncertainty, not direct P&L
+            # - Price changes captured by equity factor
+            # - Only relevant for options/derivatives
             equity_beta = sensitivities.get('equity_beta', 1.0)
             equity_impact = (scenario_factors.get('equity', 0) / 100) * equity_beta
             
-            # Secondary effects from other factors
-            rates_sensitivity = sensitivities.get('rates_sensitivity', -0.4)
-            credit_sensitivity = sensitivities.get('credit_sensitivity', 0.3)
+            # Secondary effects from other factors (only if material)
+            rates_sensitivity = sensitivities.get('rates_sensitivity', 0.0)
             
-            rates_impact = (scenario_factors.get('rates', 0) / 10000) * rates_sensitivity
-            credit_impact = (scenario_factors.get('credit', 0) / 10000) * credit_sensitivity
+            # Only apply rates if sensitivity is material
+            if abs(rates_sensitivity) > 0.15:
+                rates_impact = (scenario_factors.get('rates', 0) / 10000) * rates_sensitivity
             
         elif asset_type == 'bond':
             # Bond assets are primarily affected by rates and credit
@@ -140,7 +151,7 @@ class StressTestCalculator:
             
         elif asset_type == 'commodity':
             # Commodity assets are primarily affected by commodity factor
-            commodity_beta = sensitivities.get('commodity_beta', 1.0)
+            commodity_beta = sensitivities.get('commodity_beta', sensitivities.get('commodity_sensitivity', 1.0))
             commodity_impact = (scenario_factors.get('commodity', 0) / 100) * commodity_beta
             
             # Secondary effects
@@ -322,13 +333,20 @@ class StressTestCalculator:
                     asset_class_impacts[asset_class]['current_value'] * 100
                 )
         
-        # Calculate factor attribution
-        factor_attribution = {'equity': 0, 'rates': 0, 'credit': 0, 'fx': 0, 'commodity': 0}
+        # Calculate factor attribution - only include relevant factors
+        # A factor is relevant if it has material contribution (>0.1%)
+        factor_attribution = {}
+        temp_attribution = {'equity': 0, 'rates': 0, 'credit': 0, 'fx': 0, 'commodity': 0}
         
         for asset_result in asset_results:
             weight = asset_result['weight']
             for factor, contribution in asset_result['factor_contributions'].items():
-                factor_attribution[factor] += contribution * weight
+                temp_attribution[factor] += contribution * weight
+        
+        # Only include factors with material impact
+        for factor, impact in temp_attribution.items():
+            if abs(impact) > 0.01:  # >0.01% impact threshold
+                factor_attribution[factor] = impact
         
         # Calculate risk metrics
         risk_metrics = self._calculate_risk_metrics(asset_results, scenario_factors)

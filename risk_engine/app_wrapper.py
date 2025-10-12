@@ -5,6 +5,7 @@ Adds modern infrastructure without changing core calculation logic
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import os
@@ -15,6 +16,7 @@ import logging
 from datetime import datetime
 import asyncio
 import sys
+from pathlib import Path
 
 # Add var_models to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'var_models'))
@@ -99,6 +101,33 @@ async def health_check():
         version="1.0.0",
         models_available=["parametric", "historical", "monte_carlo", "portfolio_var"]
     )
+
+@app.get("/images/{filename}")
+async def serve_chart_image(filename: str):
+    """
+    Serve VaR chart images from filesystem
+    Fallback endpoint for serving PNG files saved to disk
+    """
+    try:
+        # Security: only allow PNG files and prevent directory traversal
+        if not filename.endswith('.png') or '..' in filename or '/' in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        # Check if file exists in current directory
+        file_path = Path(filename)
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Chart image not found")
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type="image/png",
+            filename=filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving image {filename}: {e}")
+        raise HTTPException(status_code=500, detail="Error serving image")
 
 # =============================================
 # VAR CALCULATION ENDPOINTS
@@ -560,11 +589,50 @@ async def legacy_run_var(request: dict):
             
             logger.info(f"Calculation completed successfully with method: {method}")
             
-            # Return in the old Express server format
+            # Extract chart_base64 and upload to Supabase Storage
+            chart_base64 = result.get('chart_base64')
+            chart_storage_url = None
+            portfolio_id = portfolio_data.get('id')
+            
+            if chart_base64 and portfolio_id:
+                try:
+                    # Get user_id if available (for folder organization)
+                    user_id = portfolio_data.get('user_id', 'anonymous')
+                    
+                    # Upload to Supabase Storage
+                    supabase_service = get_supabase_service()
+                    chart_storage_url = await supabase_service.upload_chart_to_storage(
+                        chart_base64=chart_base64,
+                        user_id=user_id,
+                        portfolio_id=portfolio_id,
+                        method=method
+                    )
+                    
+                    if chart_storage_url:
+                        logger.info(f"Chart uploaded to Supabase Storage: {chart_storage_url}")
+                    
+                    # Save result to database
+                    result_id = await supabase_service.save_var_result(
+                        portfolio_id=portfolio_id,
+                        calc_type=method,
+                        var_data=result,
+                        chart_url=chart_storage_url,
+                        user_id=user_id
+                    )
+                    
+                    if result_id:
+                        logger.info(f"Result saved to database: {result_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Error uploading chart or saving result: {e}")
+                    # Don't fail the request if storage/db fails
+            
+            # Return in the old Express server format with both URLs and base64
             return {
                 "success": True,
                 "results": result.get('results', result),
-                "chartUrl": result.get('chart_url', ''),
+                "chartUrl": chart_storage_url or result.get('chart_url', ''),
+                "chartBase64": chart_base64,
                 "method": method,
                 "timestamp": datetime.utcnow().isoformat()
             }

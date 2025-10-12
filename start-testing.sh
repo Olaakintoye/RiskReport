@@ -22,3 +22,5 @@ echo "🔍 Checking database setup..."
 echo ""
 ./setup-database-direct.sh
 
+
+

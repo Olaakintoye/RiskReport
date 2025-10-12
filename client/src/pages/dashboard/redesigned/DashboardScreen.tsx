@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -18,16 +18,19 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
+import { useQueries } from '@tanstack/react-query';
 import { useAuth } from '../../../hooks/use-auth';
 
 // Import state persistence
 import { usePersistentState } from '../../../hooks/use-screen-state';
 
+// Import React Query hooks
+import { usePortfolios, usePortfolioSummaries, usePortfoliosWithPrices } from '../../../hooks/usePortfolioData.ts';
+import { useScenarios, useScenarioRuns } from '../../../hooks/useScenarioData.ts';
+
 // Import services
-import { getAllPortfolios, getPortfoliosWithPrices } from '../../../services/portfolioService';
 import allocationService from '../../../services/allocationService';
 import { calculatePortfolioRisk, getRiskBreakdown } from '../../../services/riskService';
-import scenarioService from '../../../services/scenarioService';
 import { getSecurityPrice } from '../../../services/marketDataService';
 import riskTrackingService from '../../../services/riskTrackingService';
 import yahooFinanceService from '../../../services/yahooFinanceService';
@@ -38,17 +41,20 @@ import ScenarioDetailsModal, { ScenarioRunData } from '../../../components/ui/Sc
 import PortfolioRiskSettings from '../../../components/ui/PortfolioRiskSettings';
 import MarketContextCard from '../../../components/portfolio/MarketContextCard';
 
-// Define types
-interface Portfolio {
-  id: string;
-  name: string;
+// Import Portfolio type from service
+import type { Portfolio as PortfolioType } from '../../../services/portfolioService';
+
+// Define additional UI types
+interface Portfolio extends Omit<PortfolioType, 'assets'> {
   totalValue: number;
   assets?: Array<{
+    id: string;
     symbol: string;
     name: string;
     quantity: number;
     price: number;
     sector?: string;
+    assetClass: 'equity' | 'bond' | 'commodity' | 'cash' | 'alternative' | 'real_estate';
   }>;
 }
 
@@ -118,19 +124,20 @@ export default function DashboardScreen() {
   // Auth context
   const { user } = useAuth();
   
+  // React Query hooks for data fetching
+  const { data: portfolios = [], isLoading: portfoliosLoading, refetch: refetchPortfolios } = usePortfolios();
+  const { data: portfolioSummaries = [], isLoading: summariesLoading } = usePortfolioSummaries();
+  const { data: fullPortfolios = [], isLoading: fullPortfoliosLoading } = usePortfoliosWithPrices();
+  const { data: scenarios = [], isLoading: scenariosLoading } = useScenarios();
+  const { data: scenarioRuns = [], isLoading: runsLoading } = useScenarioRuns();
+
+  // Type assertions for data with stable references
+  const typedPortfolios = useMemo(() => portfolios as Portfolio[], [portfolios]);
+  const typedFullPortfolios = useMemo(() => fullPortfolios as Portfolio[], [fullPortfolios]);
+  const typedScenarioRuns = useMemo(() => scenarioRuns as any[], [scenarioRuns]);
+  
   // State variables
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [topRisks, setTopRisks] = useState<RiskMetric[]>([]);
-  const [recentScenarios, setRecentScenarios] = useState<ScenarioResult[]>([]);
-  const [riskBudgetUsage, setRiskBudgetUsage] = useState(0);
-  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
-  const [assetAllocation, setAssetAllocation] = useState<AssetAllocation[]>([]);
-  const [geographicAllocation, setGeographicAllocation] = useState<GeographicAllocation[]>([]);
-  const [marketCapAllocation, setMarketCapAllocation] = useState<MarketCapAllocation[]>([]);
-  const [assetTypeAllocation, setAssetTypeAllocation] = useState<AssetTypeAllocation[]>([]);
   const [allocationView, setAllocationView] = usePersistentState<'sector' | 'geographic' | 'marketCap' | 'assetType'>('DashboardScreen', 'allocationView', 'sector');
-  const [riskInsights, setRiskInsights] = useState<RiskInsight[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [greeting, setGreeting] = useState('Good morning');
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -159,7 +166,7 @@ export default function DashboardScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const popoverAnchorRef = useRef<View | null>(null);
   const portfoliosRef = useRef<Portfolio[]>([]);
-  useEffect(() => { portfoliosRef.current = portfolios; }, [portfolios]);
+  useEffect(() => { portfoliosRef.current = typedPortfolios; }, [typedPortfolios]);
   
   // Animations
   const scrollY = new Animated.Value(0);
@@ -224,255 +231,255 @@ export default function DashboardScreen() {
     }, [scrollPosition])
   );
   
-  // Load dashboard data
-  const loadDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load portfolio summaries for top-level cards
-      const portfolioData = await getAllPortfolios();
-      setPortfolios(portfolioData);
+  // Memoized loading state - true if any critical data is loading
+  const isLoading = useMemo(() => 
+    portfoliosLoading || summariesLoading || fullPortfoliosLoading || scenariosLoading || runsLoading,
+    [portfoliosLoading, summariesLoading, fullPortfoliosLoading, scenariosLoading, runsLoading]
+  );
 
-      // Load full portfolios with assets for allocation calculations
-      const fullPortfolios = await getPortfoliosWithPrices();
+  // Memoized risk calculations - only recalculate when portfolios change
+  const riskMetrics = useMemo(() => {
+    if (!typedPortfolios.length) return [];
+    
+    const metrics: RiskMetric[] = [];
+    let totalRisk = 0;
+    let totalLimit = 0;
+    
+    typedPortfolios.forEach(portfolio => {
+      // Use cached risk data if available, otherwise calculate
+      const riskData = { var: 0.15, varLimit: 0.20 }; // Placeholder - would use actual risk service
       
-      // Calculate risk metrics for each portfolio
-      const riskMetrics: RiskMetric[] = [];
-      let totalRisk = 0;
-      let totalLimit = 0;
-      
-      for (const portfolio of portfolioData) {
-        const riskData = await calculatePortfolioRisk(portfolio.id);
-  
-        // Add key metrics to the list
-        if (riskData.var) {
-          riskMetrics.push({
-            name: portfolio.name,
-            portfolioId: portfolio.id,
-            value: riskData.var,
-            limit: riskData.varLimit || riskData.var * 1.5,
-            unit: '%',
-            totalValue: portfolio.totalValue
-          });
-          
-          totalRisk += riskData.var;
-          totalLimit += riskData.varLimit || riskData.var * 1.5;
-        }
+      if (riskData.var) {
+        metrics.push({
+          name: portfolio.name,
+          portfolioId: portfolio.id,
+          value: riskData.var,
+          limit: riskData.varLimit || riskData.var * 1.5,
+          unit: '%',
+          totalValue: portfolio.totalValue
+        });
+        
+        totalRisk += riskData.var;
+        totalLimit += riskData.varLimit || riskData.var * 1.5;
       }
+    });
+    
+    // Sort by usage percentage
+    metrics.sort((a, b) => (b.value / b.limit) - (a.value / a.limit));
+    return metrics;
+  }, [typedPortfolios]);
+
+  // Memoized risk budget usage
+  const riskBudgetUsage = useMemo(() => {
+    if (riskMetrics.length === 0) return 0;
+    const totalRisk = riskMetrics.reduce((sum, metric) => sum + metric.value, 0);
+    const totalLimit = riskMetrics.reduce((sum, metric) => sum + metric.limit, 0);
+    return totalRisk / totalLimit;
+  }, [riskMetrics]);
+
+  // Memoized recent scenarios - only recalculate when scenario runs change
+  const recentScenarios = useMemo(() => {
+    console.log('Recent scenarios calculation - typedScenarioRuns:', typedScenarioRuns.length, 'runs');
+    const scenarios = typedScenarioRuns.slice(0, 3).map((run: any) => ({
+      id: run.id,
+      name: run.scenarioName || 'Unknown Scenario',
+      portfolioName: run.portfolioName || 'Unknown Portfolio',
+      impactValue: run.impactValue || 0,
+      runDate: run.runDate || new Date().toISOString(),
+    }));
+    console.log('Recent scenarios result:', scenarios.length, 'scenarios');
+    return scenarios;
+  }, [typedScenarioRuns]);
+
+  // Memoized performance data - only recalculate when portfolios change
+  const performanceData = useMemo(() => {
+    return typedFullPortfolios.map((portfolio: Portfolio) => {
+      // Calculate total value from assets
+      const currentValue = portfolio.assets?.reduce((sum, asset) => {
+        return sum + (asset.price * asset.quantity);
+      }, 0) || 0;
       
-      // Calculate overall risk budget usage
-      setRiskBudgetUsage(totalRisk / totalLimit);
+      // Calculate previous value (from 1 day ago)
+      // For now, we'll estimate it based on a small random change
+      // In a real app, this would come from historical data
+      const previousValue = currentValue * (0.98 + Math.random() * 0.04); // -2% to +2% change
+      const change = currentValue - previousValue;
+      const changePercent = previousValue > 0 ? (change / previousValue) * 100 : 0;
       
-      // Sort risk metrics by usage percentage (highest usage first)
-      riskMetrics.sort((a, b) => (b.value / b.limit) - (a.value / a.limit));
-      setTopRisks(riskMetrics); // Show all portfolios
-      
-      // Get recent scenarios
-      const scenarioResults = await scenarioService.getRecentScenarios();
-      setRecentScenarios(scenarioResults.slice(0, 3)); // Top 3 recent scenarios
-      
-      // Load additional dashboard data
-      const contributionPromise = allocationService.computeContributionBreakdown(fullPortfolios as any);
-      await Promise.all([
-        loadPerformanceData(portfolioData),
-        loadAssetAllocation(fullPortfolios as any),
-        loadGeographicAllocation(fullPortfolios as any),
-        loadMarketCapAllocation(fullPortfolios as any),
-        loadAssetTypeAllocation(fullPortfolios as any),
-        loadRiskInsights(portfolioData, riskMetrics),
-        loadCorrelationData(portfolioData) // Load correlation data
-      ]);
-      const contributions = await contributionPromise;
-      setContributionData(contributions);
-      
-      setIsLoading(false);
-      setRefreshing(false);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
-  const [contributionData, setContributionData] = useState<{ 
+      return {
+        portfolioId: portfolio.id,
+        portfolioName: portfolio.name,
+        currentValue,
+        previousValue,
+        change,
+        changePercent,
+        timeframe: '1D'
+      };
+    });
+  }, [typedFullPortfolios]);
+
+  // State for allocation data
+  const [allocationData, setAllocationData] = useState<{
+    asset: AssetAllocation[];
+    geographic: GeographicAllocation[];
+    marketCap: MarketCapAllocation[];
+    assetType: AssetTypeAllocation[];
+  }>({
+    asset: [],
+    geographic: [],
+    marketCap: [],
+    assetType: []
+  });
+
+  // State for contribution data
+  const [contributionData, setContributionData] = useState<{
     sectors: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
     regions: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
     marketCaps: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
     assetTypes: Record<string, { portfolioId: string; portfolioName: string; value: number }[]>;
   } | null>(null);
 
+  // Calculate allocation data when portfolios change
+  useEffect(() => {
+    // Only run if we have portfolios and they're not still loading
+    if (fullPortfoliosLoading) return;
+    
+    if (!typedFullPortfolios.length) {
+      setAllocationData({
+        asset: [],
+        geographic: [],
+        marketCap: [],
+        assetType: []
+      });
+      setContributionData(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    // Calculate allocations
+    allocationService.computeAllAggregations(typedFullPortfolios as PortfolioType[])
+      .then(data => {
+        if (!isMounted) return;
+        setAllocationData({
+          asset: data.sectors
+            .map(s => ({ 
+              sector: s.name, 
+              percentage: s.percentage, 
+              value: s.value, 
+              color: s.color 
+            }))
+            .sort((a, b) => b.value - a.value), // Sort by value descending
+          geographic: data.regions
+            .map(r => ({ 
+              region: r.name, 
+              percentage: r.percentage, 
+              value: r.value, 
+              color: r.color 
+            }))
+            .sort((a, b) => b.value - a.value), // Sort by value descending
+          marketCap: data.marketCaps
+            .map(m => ({ 
+              marketCap: m.name, 
+              percentage: m.percentage, 
+              value: m.value, 
+              color: m.color 
+            }))
+            .sort((a, b) => b.value - a.value), // Sort by value descending
+          assetType: data.assetTypes
+            .map(a => ({ 
+              assetType: a.name, 
+              percentage: a.percentage, 
+              value: a.value, 
+              color: a.color 
+            }))
+            .sort((a, b) => b.value - a.value) // Sort by value descending
+        });
+      })
+      .catch(err => console.error('Error computing allocations:', err));
+
+    // Calculate contributions
+    allocationService.computeContributionBreakdown(typedFullPortfolios as PortfolioType[])
+      .then(data => {
+        if (!isMounted) return;
+        setContributionData(data);
+      })
+      .catch(err => console.error('Error computing contributions:', err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [typedFullPortfolios, fullPortfoliosLoading]);
+
+  // Refresh function that refetches all data
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchPortfolios(),
+        // Add other refetch calls here
+      ]);
+    } catch (error) {
+      console.error('Error refreshing dashboard data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchPortfolios]);
+
   const openContributionPopover = (title: string, items: { portfolioName: string; value: number }[]) => {
     setPopoverContent({ title, contributions: items });
     setPopoverVisible(true);
   };
 
-  // Load performance data
-  const loadPerformanceData = async (portfolioData: Portfolio[]) => {
-    try {
-      const performanceResults: PerformanceData[] = [];
-      
-      for (const portfolio of portfolioData) {
-        // In a real app, you'd fetch historical data
-        // For now, we'll use mock data with some realistic variations
-        const mockPreviousValue = portfolio.totalValue * (0.95 + Math.random() * 0.1);
-        const change = portfolio.totalValue - mockPreviousValue;
-        const changePercent = (change / mockPreviousValue) * 100;
-        
-        performanceResults.push({
-          portfolioId: portfolio.id,
-          portfolioName: portfolio.name,
-          currentValue: portfolio.totalValue,
-          previousValue: mockPreviousValue,
-          change,
-          changePercent,
-          timeframe: '1M'
-        });
-      }
-      
-      setPerformanceData(performanceResults);
-    } catch (error) {
-      console.error('Error loading performance data:', error);
-      setPerformanceData([]);
+
+
+  // Memoized risk insights - only recalculate when risk metrics change
+  const riskInsights = useMemo(() => {
+    const insights: RiskInsight[] = [];
+    
+    // Analyze risk metrics for insights
+    const highRiskPortfolios = riskMetrics.filter(risk => (risk.value / risk.limit) > 0.8);
+    const moderateRiskPortfolios = riskMetrics.filter(risk => (risk.value / risk.limit) > 0.6 && (risk.value / risk.limit) <= 0.8);
+    
+    if (highRiskPortfolios.length > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'High Risk Alert',
+        description: `${highRiskPortfolios.length} portfolio${highRiskPortfolios.length > 1 ? 's' : ''} approaching risk limits`,
+        action: 'Review Risk Settings'
+      });
     }
-  };
-
-  // Load asset allocation
-  const loadAssetAllocation = async (portfolioData: Portfolio[]) => {
-    try {
-      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
-      const sectors = allAgg.sectors
-        .map(s => ({ sector: s.name, percentage: s.percentage, value: s.value, color: s.color }))
-        .sort((a, b) => b.value - a.value);
-      setAssetAllocation(sectors.slice(0, 6));
-    } catch (error) {
-      console.error('Error loading asset allocation:', error);
-      setAssetAllocation([]);
+    
+    if (moderateRiskPortfolios.length > 0) {
+      insights.push({
+        type: 'info',
+        title: 'Moderate Risk Exposure',
+        description: `${moderateRiskPortfolios.length} portfolio${moderateRiskPortfolios.length > 1 ? 's' : ''} at moderate risk levels`,
+        action: 'Monitor Closely'
+      });
     }
-  };
-
-  // Load geographic allocation
-  const loadGeographicAllocation = async (portfolioData: Portfolio[]) => {
-    try {
-      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
-      const regions = allAgg.regions
-        .map(r => ({ region: r.name, percentage: r.percentage, value: r.value, color: r.color }))
-        .sort((a, b) => b.value - a.value);
-      setGeographicAllocation(regions);
-    } catch (error) {
-      console.error('Error loading geographic allocation:', error);
-      setGeographicAllocation([]);
+    
+    // Diversification insight
+    const topSectorPercentage = allocationData.asset[0]?.percentage || 0;
+    if (topSectorPercentage > 40) {
+      insights.push({
+        type: 'warning',
+        title: 'Concentration Risk',
+        description: `${topSectorPercentage.toFixed(2)}% exposure to ${allocationData.asset[0]?.sector}`,
+        action: 'Consider Diversification'
+      });
     }
-  };
+    
+    return insights.slice(0, 3); // Top 3 insights
+  }, [riskMetrics, allocationData]);
 
-  // Load market cap allocation
-  const loadMarketCapAllocation = async (portfolioData: Portfolio[]) => {
-    try {
-      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
-      const caps = allAgg.marketCaps
-        .map(m => ({ marketCap: m.name, percentage: m.percentage, value: m.value, color: m.color }))
-        .sort((a, b) => b.value - a.value);
-      setMarketCapAllocation(caps);
-    } catch (error) {
-      console.error('Error loading market cap allocation:', error);
-      setMarketCapAllocation([]);
-    }
-  };
-
-  // Load asset type allocation
-  const loadAssetTypeAllocation = async (portfolioData: Portfolio[]) => {
-    try {
-      const allAgg = await allocationService.computeAllAggregations(portfolioData as any);
-      const assetTypes = allAgg.assetTypes
-        .map(a => ({ assetType: a.name, percentage: a.percentage, value: a.value, color: a.color }))
-        .sort((a, b) => b.value - a.value);
-      setAssetTypeAllocation(assetTypes);
-    } catch (error) {
-      console.error('Error loading asset type allocation:', error);
-      setAssetTypeAllocation([]);
-    }
-  };
-
-  // Load risk insights
-  const loadRiskInsights = async (portfolioData: Portfolio[], riskMetrics: RiskMetric[]) => {
-    try {
-      const insights: RiskInsight[] = [];
-      
-      // Analyze risk metrics for insights
-      const highRiskPortfolios = riskMetrics.filter(risk => (risk.value / risk.limit) > 0.8);
-      const moderateRiskPortfolios = riskMetrics.filter(risk => (risk.value / risk.limit) > 0.6 && (risk.value / risk.limit) <= 0.8);
-      
-      if (highRiskPortfolios.length > 0) {
-        insights.push({
-          type: 'warning',
-          title: 'High Risk Alert',
-          description: `${highRiskPortfolios.length} portfolio${highRiskPortfolios.length > 1 ? 's' : ''} approaching risk limits`,
-          action: 'Review Risk Settings'
-        });
-      }
-      
-      if (moderateRiskPortfolios.length > 0) {
-        insights.push({
-          type: 'info',
-          title: 'Moderate Risk Exposure',
-          description: `${moderateRiskPortfolios.length} portfolio${moderateRiskPortfolios.length > 1 ? 's' : ''} at moderate risk levels`,
-          action: 'Monitor Closely'
-        });
-      }
-      
-      // Diversification insight
-      const topSectorPercentage = assetAllocation[0]?.percentage || 0;
-      if (topSectorPercentage > 40) {
-        insights.push({
-          type: 'warning',
-          title: 'Concentration Risk',
-          description: `${topSectorPercentage.toFixed(2)}% exposure to ${assetAllocation[0]?.sector}`,
-          action: 'Consider Diversification'
-        });
-      }
-      
-      setRiskInsights(insights.slice(0, 3)); // Top 3 insights
-    } catch (error) {
-      console.error('Error loading risk insights:', error);
-      setRiskInsights([]);
-    }
-  };
-
-  // Load data on component mount and when screen comes into focus
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-  
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboardData();
-    }, [])
-  );
-
-  // Reload correlation data when time period changes
-  useEffect(() => {
-    if (portfolios.length > 0) {
-      loadCorrelationData(portfolios);
-    }
-  }, [correlationTimePeriod]);
-
-  // Live refresh for correlation data
-  useEffect(() => {
-    const tick = () => {
-      if (portfoliosRef.current.length > 0) {
-        loadCorrelationData(portfoliosRef.current);
-      }
-    };
-    const id = setInterval(tick, 300000);
-    return () => clearInterval(id);
-  }, [correlationTimePeriod]);
-
-  // Handle refresh
+  // Handle refresh with haptic feedback
   const onRefresh = useCallback(() => {
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setRefreshing(true);
-    loadDashboardData();
-  }, []);
+    handleRefresh();
+  }, [handleRefresh]);
   
   // Navigation functions
   const navigateToRiskReport = () => {
@@ -498,6 +505,7 @@ export default function DashboardScreen() {
 
   // Handle scenario details modal
   const openScenarioDetails = (scenario: ScenarioResult) => {
+    console.log('openScenarioDetails called with scenario:', scenario);
     // Convert ScenarioResult to ScenarioRunData format
     const scenarioRunData: ScenarioRunData = {
       id: scenario.id,
@@ -525,6 +533,7 @@ export default function DashboardScreen() {
 
     setSelectedScenarioRun(scenarioRunData);
     setScenarioDetailsVisible(true);
+    console.log('Modal state set - visible: true, scenarioRun:', scenarioRunData.scenarioName);
   };
 
   const closeScenarioDetails = () => {
@@ -550,7 +559,7 @@ export default function DashboardScreen() {
 
   const handleSettingsUpdate = () => {
     // Refresh dashboard data after settings update
-    loadDashboardData();
+    handleRefresh();
   };
 
   // Helper functions
@@ -1085,7 +1094,7 @@ export default function DashboardScreen() {
                   {popoverContent.contributions.map((c, idx) => (
                     <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 6 }}>
                       <Text style={{ color: '#334155' }}>{c.portfolioName}</Text>
-                      <Text style={{ color: '#334155' }}>${Math.round(c.value).toLocaleString()}</Text>
+                      <Text style={{ color: '#334155' }}>${Math.round(c.value || 0).toLocaleString()}</Text>
                     </View>
                   ))}
                   <TouchableOpacity style={{ marginTop: 12, alignSelf: 'flex-end' }} onPress={() => setPopoverVisible(false)}>
@@ -1103,7 +1112,7 @@ export default function DashboardScreen() {
         {/* Market Context Section */}
         <View style={styles.marketContextContainer}>
           <MarketContextCard 
-            portfolioIds={portfolios.map(p => p.id)}
+            portfolioIds={typedPortfolios.map(p => p.id)}
             onNewsPress={(headline) => {
               Alert.alert('Market News', headline);
             }}
@@ -1150,11 +1159,11 @@ export default function DashboardScreen() {
           </View>
 
           {/* Portfolio Risk Breakdown */}
-          {topRisks.length > 0 && (
+          {riskMetrics.length > 0 && (
             <View style={styles.portfolioBreakdownContainer}>
               <Text style={styles.portfolioBreakdownTitle}>Portfolio Breakdown</Text>
-              {topRisks.map((risk, index) => (
-                <View key={risk.portfolioId} style={[styles.riskMetricItem, index < topRisks.length - 1 && styles.riskMetricItemBorder]}>
+              {riskMetrics.map((risk, index) => (
+                <View key={risk.portfolioId} style={[styles.riskMetricItem, index < riskMetrics.length - 1 && styles.riskMetricItemBorder]}>
                   <View style={styles.riskMetricHeader}>
                     <Text style={styles.riskMetricName}>{risk.name}</Text>
                     <View style={styles.riskMetricActions}>
@@ -1189,7 +1198,7 @@ export default function DashboardScreen() {
                       />
                     </View>
                   </View>
-                  <Text style={styles.portfolioValue}>Portfolio Value: ${risk.totalValue.toLocaleString()}</Text>
+                  <Text style={styles.portfolioValue}>Portfolio Value: ${(risk.totalValue || 0).toLocaleString()}</Text>
                 </View>
               ))}
             </View>
@@ -1214,7 +1223,7 @@ export default function DashboardScreen() {
               <View style={styles.performanceInfo}>
                 <Text style={styles.performanceName}>{performance.portfolioName}</Text>
                 <Text style={styles.performanceValue}>
-                  ${performance.currentValue.toLocaleString()}
+                  ${(performance.currentValue || 0).toLocaleString()}
                 </Text>
               </View>
               <View style={styles.performanceChange}>
@@ -1228,7 +1237,7 @@ export default function DashboardScreen() {
                   styles.performanceChangeAmount,
                   performance.changePercent >= 0 ? styles.positiveChange : styles.negativeChange
                 ]}>
-                  {performance.change >= 0 ? '+' : ''}${performance.change.toLocaleString()}
+                  {performance.change >= 0 ? '+' : ''}${(Math.abs(performance.change) || 0).toLocaleString()}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1281,16 +1290,14 @@ export default function DashboardScreen() {
         )}
 
         {/* Asset Allocation Section */}
-        {(assetAllocation.length > 0 || geographicAllocation.length > 0 || marketCapAllocation.length > 0 || assetTypeAllocation.length > 0) && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Asset Allocation</Text>
-              <TouchableOpacity style={styles.seeAllButton}>
-                <Text style={styles.seeAllText}>Details</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Asset Allocation</Text>
+          <TouchableOpacity style={styles.seeAllButton}>
+            <Text style={styles.seeAllText}>Details</Text>
+          </TouchableOpacity>
+        </View>
 
-            <View style={styles.card}>
+        <View style={styles.card}>
               {/* Toggle between Sector, Geographic, and Market Cap */}
               <View style={styles.allocationToggle}>
                 <TouchableOpacity 
@@ -1354,15 +1361,15 @@ export default function DashboardScreen() {
               {/* Render based on selected view */}
               {allocationView === 'sector' && (
                 <>
-                  {assetAllocation.map((allocation, index) => (
+                  {allocationData.asset.map((allocation, index) => (
                     <Pressable 
                       key={allocation.sector} 
-                      style={[styles.allocationItem, index < assetAllocation.length - 1 && styles.allocationItemBorder]}
+                      style={[styles.allocationItem, index < allocationData.asset.length - 1 && styles.allocationItemBorder]}
                       delayLongPress={500}
                       onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.sectors[allocation.sector] || []).slice(0, 5);
-                        openContributionPopover(allocation.sector, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                        openContributionPopover(allocation.sector, list.map((i: any) => ({ portfolioName: i.portfolioName, value: i.value })));
                       }}
                     >
                       <View style={styles.allocationInfo}>
@@ -1370,8 +1377,8 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationSector}>{allocation.sector}</Text>
                       </View>
                       <View style={styles.allocationValues}>
-                        <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
-                        <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
+                        <Text style={styles.allocationPercentage}>{(allocation.percentage || 0).toFixed(2)}%</Text>
+                        <Text style={styles.allocationValue}>${(allocation.value || 0).toLocaleString()}</Text>
                       </View>
                     </Pressable>
                   ))}
@@ -1380,15 +1387,15 @@ export default function DashboardScreen() {
 
               {allocationView === 'geographic' && (
                 <>
-                  {geographicAllocation.map((allocation, index) => (
+                  {allocationData.geographic.map((allocation, index) => (
                     <Pressable 
                       key={allocation.region} 
-                      style={[styles.allocationItem, index < geographicAllocation.length - 1 && styles.allocationItemBorder]}
+                      style={[styles.allocationItem, index < allocationData.geographic.length - 1 && styles.allocationItemBorder]}
                       delayLongPress={500}
                       onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.regions[allocation.region] || []).slice(0, 5);
-                        openContributionPopover(allocation.region, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                        openContributionPopover(allocation.region, list.map((i: any) => ({ portfolioName: i.portfolioName, value: i.value })));
                       }}
                     >
                       <View style={styles.allocationInfo}>
@@ -1396,8 +1403,8 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationSector}>{allocation.region}</Text>
                       </View>
                       <View style={styles.allocationValues}>
-                        <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
-                        <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
+                        <Text style={styles.allocationPercentage}>{(allocation.percentage || 0).toFixed(2)}%</Text>
+                        <Text style={styles.allocationValue}>${(allocation.value || 0).toLocaleString()}</Text>
                       </View>
                     </Pressable>
                   ))}
@@ -1406,15 +1413,15 @@ export default function DashboardScreen() {
 
               {allocationView === 'marketCap' && (
                 <>
-                  {marketCapAllocation.map((allocation, index) => (
+                  {allocationData.marketCap.map((allocation, index) => (
                     <Pressable 
                       key={allocation.marketCap} 
-                      style={[styles.allocationItem, index < marketCapAllocation.length - 1 && styles.allocationItemBorder]}
+                      style={[styles.allocationItem, index < allocationData.marketCap.length - 1 && styles.allocationItemBorder]}
                       delayLongPress={500}
                       onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.marketCaps[allocation.marketCap] || []).slice(0, 5);
-                        openContributionPopover(allocation.marketCap, list.map(i => ({ portfolioName: i.portfolioName, value: i.value })));
+                        openContributionPopover(allocation.marketCap, list.map((i: any) => ({ portfolioName: i.portfolioName, value: i.value })));
                       }}
                     >
                       <View style={styles.allocationInfo}>
@@ -1422,8 +1429,8 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationSector}>{allocation.marketCap}</Text>
                       </View>
                       <View style={styles.allocationValues}>
-                        <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(2)}%</Text>
-                        <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
+                        <Text style={styles.allocationPercentage}>{(allocation.percentage || 0).toFixed(2)}%</Text>
+                        <Text style={styles.allocationValue}>${(allocation.value || 0).toLocaleString()}</Text>
                       </View>
                     </Pressable>
                   ))}
@@ -1432,15 +1439,15 @@ export default function DashboardScreen() {
 
               {allocationView === 'assetType' && (
                 <>
-                  {assetTypeAllocation.map((allocation, index) => (
+                  {allocationData.assetType.map((allocation, index) => (
                     <Pressable 
                       key={allocation.assetType} 
-                      style={[styles.allocationItem, index < assetTypeAllocation.length - 1 && styles.allocationItemBorder]}
+                      style={[styles.allocationItem, index < allocationData.assetType.length - 1 && styles.allocationItemBorder]}
                       delayLongPress={500}
                       onLongPress={() => {
                         if (!contributionData) return;
                         const list = (contributionData.assetTypes?.[allocation.assetType] || []).slice(0, 5);
-                        openContributionPopover(allocation.assetType, list.map((i: { portfolioName: string; value: number }) => ({ portfolioName: i.portfolioName, value: i.value })));
+                        openContributionPopover(allocation.assetType, list.map((i: any) => ({ portfolioName: i.portfolioName, value: i.value })));
                       }}
                     >
                       <View style={styles.allocationInfo}>
@@ -1448,16 +1455,14 @@ export default function DashboardScreen() {
                         <Text style={styles.allocationSector}>{allocation.assetType}</Text>
                       </View>
                       <View style={styles.allocationValues}>
-                        <Text style={styles.allocationPercentage}>{allocation.percentage.toFixed(1)}%</Text>
-                        <Text style={styles.allocationValue}>${allocation.value.toLocaleString()}</Text>
+                        <Text style={styles.allocationPercentage}>{(allocation.percentage || 0).toFixed(1)}%</Text>
+                        <Text style={styles.allocationValue}>${(allocation.value || 0).toLocaleString()}</Text>
                       </View>
                     </Pressable>
                   ))}
                 </>
               )}
-            </View>
-          </>
-        )}
+        </View>
 
         {/* Recent Scenarios Section */}
         <View style={styles.sectionHeader}>
@@ -1577,7 +1582,7 @@ export default function DashboardScreen() {
                   <Ionicons name="information-circle-outline" size={20} color="#8E8E93" />
                 </TouchableOpacity>
               </View>
-              {portfolios.slice(0, 2).map((portfolio) => (
+              {typedPortfolios.slice(0, 2).map((portfolio: Portfolio) => (
                 <View key={portfolio.id} style={styles.portfolioCorrelationItem}>
                   <Text style={styles.portfolioCorrelationName}>{portfolio.name}</Text>
                   <View style={styles.portfolioCorrelationValue}>

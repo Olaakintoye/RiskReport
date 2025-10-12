@@ -1,24 +1,12 @@
 import { Portfolio, Asset } from './portfolioService';
 import tiingoService from './tiingoService';
+import { classifyAsset, getClassificationStats, AssetMetadata } from './assetClassificationService';
+import { getRelevantFactors, analyzeFactorRelevance, getRelevanceSummary, type RiskFactor } from './factorRelevanceService';
 
 // ==========================================
 // QUANTITATIVE STRESS TESTING SERVICE
 // ==========================================
-
-/**
- * Asset classification and metadata
- */
-interface AssetMetadata {
-  symbol: string;
-  sector: string;
-  industry: string;
-  marketCap: 'large' | 'mid' | 'small' | 'micro';
-  geography: 'us' | 'international' | 'emerging';
-  assetType: 'equity' | 'bond' | 'commodity' | 'real_estate' | 'alternative' | 'cash';
-  duration?: number; // For bonds
-  creditRating?: string; // For bonds
-  underlyingIndex?: string; // For ETFs
-}
+// Enhanced with intelligent asset classification and factor relevance filtering
 
 /**
  * Factor sensitivities (betas) for each asset
@@ -75,55 +63,15 @@ interface PortfolioStressResult {
   };
 }
 
-/**
- * Asset classification database (in production, this would come from external data provider)
- */
-const ASSET_CLASSIFICATIONS: Record<string, Partial<AssetMetadata>> = {
-  // Equity ETFs
-  'SPY': { sector: 'Broad Market', industry: 'Large Cap Equity', marketCap: 'large', geography: 'us', assetType: 'equity', underlyingIndex: 'S&P 500' },
-  'QQQ': { sector: 'Technology', industry: 'Large Cap Growth', marketCap: 'large', geography: 'us', assetType: 'equity', underlyingIndex: 'NASDAQ-100' },
-  'IWM': { sector: 'Broad Market', industry: 'Small Cap Equity', marketCap: 'small', geography: 'us', assetType: 'equity', underlyingIndex: 'Russell 2000' },
-  'VTI': { sector: 'Broad Market', industry: 'Total Stock Market', marketCap: 'large', geography: 'us', assetType: 'equity', underlyingIndex: 'Total Stock Market' },
-  'SCHD': { sector: 'Dividend', industry: 'Dividend ETF', marketCap: 'large', geography: 'us', assetType: 'equity', underlyingIndex: 'Dow Jones US Dividend 100' },
-  
-  // Bond ETFs
-  'TLT': { sector: 'Government', industry: 'Treasury Bonds', geography: 'us', assetType: 'bond', duration: 17, creditRating: 'AAA' },
-  'IEF': { sector: 'Government', industry: 'Treasury Bonds', geography: 'us', assetType: 'bond', duration: 7, creditRating: 'AAA' },
-  'SHY': { sector: 'Government', industry: 'Treasury Bonds', geography: 'us', assetType: 'bond', duration: 2, creditRating: 'AAA' },
-  'LQD': { sector: 'Corporate', industry: 'Investment Grade Corporate', geography: 'us', assetType: 'bond', duration: 8, creditRating: 'BBB' },
-  'HYG': { sector: 'Corporate', industry: 'High Yield Corporate', geography: 'us', assetType: 'bond', duration: 4, creditRating: 'BB' },
-  'VCIT': { sector: 'Corporate', industry: 'Intermediate Corporate', geography: 'us', assetType: 'bond', duration: 6, creditRating: 'A' },
-  
-  // Real Estate
-  'VNQ': { sector: 'Real Estate', industry: 'REITs', geography: 'us', assetType: 'real_estate', underlyingIndex: 'MSCI US REIT' },
-  'SCHH': { sector: 'Real Estate', industry: 'REITs', geography: 'us', assetType: 'real_estate', underlyingIndex: 'Dow Jones US REIT' },
-  
-  // Commodities
-  'GLD': { sector: 'Precious Metals', industry: 'Gold', geography: 'us', assetType: 'commodity' },
-  'SLV': { sector: 'Precious Metals', industry: 'Silver', geography: 'us', assetType: 'commodity' },
-  'USO': { sector: 'Energy', industry: 'Oil', geography: 'us', assetType: 'commodity' },
-  
-  // International
-  'EFA': { sector: 'Broad Market', industry: 'Developed Markets', marketCap: 'large', geography: 'international', assetType: 'equity' },
-  'EEM': { sector: 'Broad Market', industry: 'Emerging Markets', marketCap: 'large', geography: 'emerging', assetType: 'equity' },
-  
-  // Individual Stocks (major holdings examples)
-  'AAPL': { sector: 'Technology', industry: 'Consumer Electronics', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'MSFT': { sector: 'Technology', industry: 'Software', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'GOOGL': { sector: 'Technology', industry: 'Internet Services', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'AMZN': { sector: 'Consumer Discretionary', industry: 'E-commerce', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'TSLA': { sector: 'Consumer Discretionary', industry: 'Electric Vehicles', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'JPM': { sector: 'Financials', industry: 'Banking', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'JNJ': { sector: 'Healthcare', industry: 'Pharmaceuticals', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'WMT': { sector: 'Consumer Staples', industry: 'Retail', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'PG': { sector: 'Consumer Staples', industry: 'Personal Products', marketCap: 'large', geography: 'us', assetType: 'equity' },
-  'V': { sector: 'Financials', industry: 'Payment Processing', marketCap: 'large', geography: 'us', assetType: 'equity' }
-};
+// Asset classifications now handled by assetClassificationService.ts
+// The database has been expanded from 20 to 100+ symbols with hybrid fallback logic
 
 /**
  * Factor sensitivity models based on asset characteristics
+ * Enhanced to zero out truly irrelevant factors for cleaner reporting
  */
 function calculateFactorSensitivities(metadata: AssetMetadata): FactorSensitivities {
+  // Initialize all sensitivities to zero
   const sensitivities: FactorSensitivities = {
     equity: 0,
     rates: 0,
@@ -135,34 +83,66 @@ function calculateFactorSensitivities(metadata: AssetMetadata): FactorSensitivit
 
   switch (metadata.assetType) {
     case 'equity':
-      // Equity sensitivity based on market cap and sector
+      // Equities: PRIMARY = equity only
+      // Note: Volatility is NOT a factor for plain stocks/ETFs because:
+      // - Volatility measures uncertainty, not direct P&L
+      // - Price changes are captured by equity factor
+      // - Volatility only matters for options/derivatives
       sensitivities.equity = calculateEquityBeta(metadata);
-      sensitivities.rates = calculateRatesSensitivityForEquity(metadata);
-      sensitivities.fx = metadata.geography === 'international' ? 0.6 : 
-                        metadata.geography === 'emerging' ? 0.8 : 0.1;
-      sensitivities.volatility = 0.8; // Most equities have positive vol sensitivity
+      
+      // Only include rates sensitivity for rate-sensitive sectors
+      const ratesSens = calculateRatesSensitivityForEquity(metadata);
+      if (Math.abs(ratesSens) > 0.15) { // Only material rate sensitivity
+        sensitivities.rates = ratesSens;
+      }
+      
+      // Only include FX for international/emerging market exposure
+      if (metadata.geography === 'international') {
+        sensitivities.fx = 0.6;
+      } else if (metadata.geography === 'emerging') {
+        sensitivities.fx = 0.8;
+      }
+      // Zero out credit, commodity, volatility for plain equities
       break;
       
     case 'bond':
+      // Bonds: PRIMARY = rates + credit, SECONDARY = fx (if non-US)
       sensitivities.rates = -(metadata.duration || 5); // Duration as rate sensitivity
       sensitivities.credit = calculateCreditSensitivity(metadata);
-      sensitivities.fx = metadata.geography !== 'us' ? 0.7 : 0.05;
+      
+      // Only include FX for non-US bonds
+      if (metadata.geography !== 'us') {
+        sensitivities.fx = 0.7;
+      }
+      // Zero out equity, commodity, volatility for bonds
       break;
       
     case 'real_estate':
+      // REITs: PRIMARY = equity + rates
       sensitivities.equity = 0.6; // REITs correlated with equity markets
-      sensitivities.rates = -0.8; // REITs sensitive to rates (but less than duration)
-      sensitivities.credit = 0.3; // Some credit sensitivity
+      sensitivities.rates = -0.8; // REITs sensitive to rates
+      // Zero out credit, fx, commodity, volatility for REITs
       break;
       
     case 'commodity':
+      // Commodities: PRIMARY = commodity + fx
       sensitivities.commodity = 1.0; // Direct commodity exposure
       sensitivities.fx = -0.4; // Commodities often inversely correlated with USD
-      sensitivities.rates = -0.2; // Some negative correlation with rates
+      // Zero out equity, rates, credit, volatility for commodities
       break;
       
     case 'cash':
+      // Cash: MINIMAL = rates only
       sensitivities.rates = 0.05; // Slight positive rate sensitivity
+      // Zero out all other factors for cash
+      break;
+      
+    case 'alternative':
+      // Alternatives: Mixed exposure depending on strategy
+      sensitivities.equity = 0.5; // Some equity correlation
+      sensitivities.credit = 0.3; // Some credit exposure
+      sensitivities.volatility = 0.6; // Often volatility-sensitive
+      // Zero out commodity, fx unless specifically commodity/fx alternatives
       break;
   }
 
@@ -236,45 +216,27 @@ function calculateCreditSensitivity(metadata: AssetMetadata): number {
 }
 
 /**
- * Get enhanced asset metadata by combining stored data with real-time lookups
+ * Get enhanced asset metadata using hybrid classification service
+ * Now uses assetClassificationService with 3-tier approach:
+ * - Tier 1: Hardcoded database (100+ symbols)
+ * - Tier 2: Dynamic Tiingo API lookup
+ * - Tier 3: Intelligent fallback heuristics
  */
 async function getAssetMetadata(symbol: string): Promise<AssetMetadata> {
-  // Start with stored classification
-  const storedData = ASSET_CLASSIFICATIONS[symbol] || {};
-  
   try {
-    // Get additional metadata from Tiingo
-    const metadata = await tiingoService.getMetadata(symbol);
-    
-    return {
-      symbol,
-      sector: storedData.sector || 'Unknown',
-      industry: storedData.industry || metadata.name || 'Unknown',
-      marketCap: storedData.marketCap || 'large',
-      geography: storedData.geography || 'us',
-      assetType: storedData.assetType || 'equity',
-      duration: storedData.duration,
-      creditRating: storedData.creditRating,
-      underlyingIndex: storedData.underlyingIndex
-    };
+    // Use the new classification service
+    const metadata = await classifyAsset(symbol);
+    return metadata;
   } catch (error) {
-    console.warn(`Could not fetch metadata for ${symbol}, using defaults`);
-    return {
-      symbol,
-      sector: storedData.sector || 'Unknown',
-      industry: storedData.industry || 'Unknown',
-      marketCap: storedData.marketCap || 'large',
-      geography: storedData.geography || 'us',
-      assetType: storedData.assetType || 'equity',
-      duration: storedData.duration,
-      creditRating: storedData.creditRating,
-      underlyingIndex: storedData.underlyingIndex
-    };
+    console.error(`Error classifying asset ${symbol}:`, error);
+    // This should rarely happen since classifyAsset has its own fallbacks
+    throw error;
   }
 }
 
 /**
  * Main quantitative stress testing function
+ * Enhanced with factor relevance filtering and improved asset classification
  */
 export async function runQuantitativeStressTest(
   portfolio: Portfolio,
@@ -293,8 +255,25 @@ export async function runQuantitativeStressTest(
     throw new Error('Portfolio has no assets to stress test');
   }
   
+  // Analyze portfolio composition and determine relevant factors
+  console.log('\n🔍 ANALYZING FACTOR RELEVANCE:');
+  const relevanceSummary = getRelevanceSummary(portfolio);
+  console.log(`Portfolio composition:`, relevanceSummary.composition.assetClassWeights);
+  console.log(`Relevant factors (${relevanceSummary.relevantFactors}/${relevanceSummary.totalFactors}):`, relevanceSummary.relevantFactorNames);
+  
+  // Get detailed factor relevance
+  const factorRelevanceDetails = analyzeFactorRelevance(portfolio);
+  factorRelevanceDetails.forEach(detail => {
+    if (detail.isRelevant) {
+      console.log(`  ✓ ${detail.factor}: ${detail.exposurePercent}% portfolio exposure via ${detail.relevantAssetClasses.join(', ')}`);
+    } else {
+      console.log(`  ✗ ${detail.factor}: ${detail.exposurePercent}% (below 5% threshold, will be filtered out)`);
+    }
+  });
+  
   // Step 1: Get current portfolio value and enhanced metadata
   const positionResults: PositionStressResult[] = [];
+  const assetClassifications: AssetMetadata[] = [];
   let totalPortfolioValue = 0;
   let totalStressedValue = 0;
   
@@ -305,11 +284,12 @@ export async function runQuantitativeStressTest(
     console.log(`   Asset data:`, asset);
     
     try {
-      // Get enhanced asset metadata
+      // Get enhanced asset metadata with hybrid classification
       const metadata = await getAssetMetadata(asset.symbol);
-      console.log(`   Classification: ${metadata.assetType} | ${metadata.sector} | ${metadata.industry}`);
+      assetClassifications.push(metadata);
+      console.log(`   Classification: ${metadata.assetType} | ${metadata.sector} | ${metadata.industry} [${metadata.classificationSource}]`);
       
-      // Calculate factor sensitivities
+      // Calculate factor sensitivities (with irrelevant factors zeroed out)
       const sensitivities = calculateFactorSensitivities(metadata);
       console.log(`   Factor Sensitivities:`, sensitivities);
       
@@ -440,13 +420,26 @@ export async function runQuantitativeStressTest(
       classValue > 0 ? (assetClassImpacts[assetClass].impact / classValue) * 100 : 0;
   });
   
-  // Calculate factor attribution
+  // Calculate factor attribution - ONLY for relevant factors
+  console.log('\n💡 CALCULATING FACTOR ATTRIBUTION (relevant factors only):');
+  const relevantFactorNames = relevanceSummary.relevantFactorNames;
   const factorAttribution: Record<string, number> = {};
-  Object.keys(scenarioFactors).forEach(factor => {
-    factorAttribution[factor] = positionResults.reduce(
+  
+  relevantFactorNames.forEach(factor => {
+    const contribution = positionResults.reduce(
       (sum, position) => sum + (position.factorContributions[factor] || 0), 0
     );
+    factorAttribution[factor] = contribution;
+    console.log(`  ${factor}: $${contribution.toFixed(2)}`);
   });
+  
+  // Report classification coverage
+  const classificationStats = getClassificationStats(assetClassifications);
+  console.log(`\n📈 CLASSIFICATION COVERAGE:`);
+  console.log(`  Hardcoded: ${classificationStats.hardcodedCount}/${assetClassifications.length}`);
+  console.log(`  API Lookup: ${classificationStats.apiCount}/${assetClassifications.length}`);
+  console.log(`  Fallback: ${classificationStats.fallbackCount}/${assetClassifications.length}`);
+  console.log(`  Overall Coverage: ${classificationStats.coveragePercent}%`);
   
   // Calculate risk metrics
   const positions = positionResults.map(p => p.currentValue);

@@ -15,3 +15,5 @@ echo "  ./setup-database-direct.sh"
 echo "  ./setup-test-portfolio.sh"
 echo "  ./test-var-calculation.sh"
 
+
+

@@ -9,6 +9,8 @@ import json
 import sys
 import os
 import logging
+import base64
+from io import BytesIO
 
 # Import market data helper for fallback fetching
 try:
@@ -261,6 +263,60 @@ def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5
                 return 0.0  # Return 0 instead of None to maintain numeric type
             return float(value)
         
+        # Generate chart and encode as base64
+        chart_base64 = None
+        try:
+            plt.figure(figsize=(10, 6))
+            
+            # Plot histogram with bars (matching Historical and Monte Carlo style)
+            n, bins, patches = plt.hist(simulated_losses, bins=50, alpha=0.7, density=True, 
+                                       color='skyblue', edgecolor='black')
+            
+            # Color the tail losses in red
+            tail_idx = np.where(bins > var)[0]
+            if len(tail_idx) > 0:
+                for i in range(tail_idx[0], len(patches)):
+                    patches[i].set_facecolor('salmon')
+            
+            # Add vertical lines for VaR and CVaR
+            plt.axvline(var, color='red', linestyle='--', linewidth=2, 
+                        label=f'VaR ({confidence*100:.0f}%): ${var:,.2f} ({var/portfolio_value*100:.2f}%)')
+            plt.axvline(cvar, color='darkred', linestyle='-.', linewidth=2,
+                        label=f'CVaR: ${cvar:,.2f} ({cvar/portfolio_value*100:.2f}%)')
+            
+            plt.title(f'Parametric VaR Analysis ({horizon}-Day Horizon)\nBased on {lookback_years}-Year Historical Data, {distribution.capitalize()} Distribution', fontsize=14)
+            plt.xlabel('Loss Amount ($)', fontsize=12)
+            plt.ylabel('Probability Density', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.legend(fontsize=10)
+            
+            # Add text with key metrics
+            info_text = (
+                f"Portfolio Value: ${portfolio_value:,.2f}\n"
+                f"Assets: {len(portfolio_df)}"
+            )
+            plt.figtext(0.15, 0.01, info_text, fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
+            
+            plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+            
+            # Save to BytesIO and encode as base64
+            buffer = BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            chart_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+            buffer.close()
+            
+            # Also save to file for Railway filesystem backup
+            plt.savefig("parametric_var.png", dpi=150)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            plt.savefig(f"parametric_var_{timestamp}.png", dpi=150)
+            
+            plt.close()
+            logger.info("Chart generated and encoded as base64")
+        except Exception as e:
+            logger.error(f"Error generating chart: {e}")
+            chart_base64 = None
+        
         # Return results in standard format
         return {
             'results': {
@@ -268,6 +324,7 @@ def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5
                 'cvar': sanitize_float(cvar),
                 'portfolio_value': sanitize_float(portfolio_value),
                 'var_percentage': sanitize_float((var / portfolio_value) * 100 if portfolio_value > 0 else 0),
+                'cvar_percentage': sanitize_float((cvar / portfolio_value) * 100 if portfolio_value > 0 else 0),
                 'confidence_level': confidence,
                 'time_horizon': horizon,
                 'lookback_years': lookback_years,
@@ -275,7 +332,8 @@ def calculate_var(portfolio_assets, confidence=0.95, horizon=1, lookback_years=5
                 'stats': {k: sanitize_float(v) if isinstance(v, (int, float)) else v 
                          for k, v in dist_stats.items()}
             },
-            'chart_url': ''
+            'chart_url': 'parametric_var.png',
+            'chart_base64': chart_base64
         }
     except Exception as e:
         logger.error(f"Error in calculate_var: {e}")

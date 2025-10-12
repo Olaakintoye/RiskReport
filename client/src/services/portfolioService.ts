@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tiingoService from './tiingoService';
 import { v4 as uuidv4 } from '../utils/uuid';
+import { syncPortfolioToSupabase, deletePortfolioFromSupabase } from './supabaseSync';
 
 // Define types for portfolio data
 export interface Asset {
@@ -457,6 +458,16 @@ const createPortfolio = async (portfolio: Omit<Portfolio, 'id' | 'createdAt' | '
     
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPortfolios));
     
+    // 🔄 AUTO-SYNC: Sync to Supabase for VaR calculations
+    console.log('📤 Syncing new portfolio to Supabase...');
+    const syncResult = await syncPortfolioToSupabase(portfolioWithRealPrices);
+    if (syncResult.success) {
+      console.log('✅ Portfolio synced to Supabase');
+    } else {
+      console.warn('⚠️ Failed to sync portfolio to Supabase:', syncResult.error);
+      // Don't throw - portfolio is still saved locally
+    }
+    
     return portfolioWithRealPrices;
   } catch (error) {
     console.error('Error creating portfolio:', error);
@@ -482,6 +493,15 @@ const updatePortfolio = async (portfolio: Portfolio): Promise<Portfolio> => {
     );
     
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPortfolios));
+    
+    // 🔄 AUTO-SYNC: Sync to Supabase
+    console.log('📤 Syncing updated portfolio to Supabase...');
+    const syncResult = await syncPortfolioToSupabase(portfolioWithRealPrices);
+    if (syncResult.success) {
+      console.log('✅ Portfolio synced to Supabase');
+    } else {
+      console.warn('⚠️ Failed to sync portfolio to Supabase:', syncResult.error);
+    }
     
     return portfolioWithRealPrices;
   } catch (error) {
@@ -619,6 +639,16 @@ export const importPortfolioFromCSV = async (csvText: string, portfolioName: str
 
   const portfolios = await getPortfolios();
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...portfolios, withPrices]));
+  
+  // 🔄 AUTO-SYNC: Sync imported portfolio to Supabase
+  console.log('📤 Syncing imported portfolio to Supabase...');
+  const syncResult = await syncPortfolioToSupabase(withPrices);
+  if (syncResult.success) {
+    console.log('✅ Imported portfolio synced to Supabase');
+  } else {
+    console.warn('⚠️ Failed to sync imported portfolio:', syncResult.error);
+  }
+  
   return withPrices;
 };
 
@@ -631,6 +661,15 @@ const deletePortfolio = async (id: string): Promise<void> => {
     const updatedPortfolios = portfolios.filter(p => p.id !== id);
     
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPortfolios));
+    
+    // 🔄 AUTO-SYNC: Delete from Supabase
+    console.log('📤 Deleting portfolio from Supabase...');
+    const syncResult = await deletePortfolioFromSupabase(id);
+    if (syncResult.success) {
+      console.log('✅ Portfolio deleted from Supabase');
+    } else {
+      console.warn('⚠️ Failed to delete portfolio from Supabase:', syncResult.error);
+    }
   } catch (error) {
     console.error('Error deleting portfolio:', error);
     throw error;

@@ -16,7 +16,7 @@ import { fromZodError } from "zod-validation-error";
 import { addMonths } from "date-fns";
 import { setupAuth } from "./auth";
 import { log } from "./vite";
-const stressTestRouter = require("./api/stress-test-api");
+import stressTestRouter from "./api/stress-test-api.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Enable CORS for all routes

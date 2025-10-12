@@ -1,7 +1,11 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { spawn } = require('child_process');
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 // ==========================================
@@ -307,4 +311,4 @@ router.get('/history', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

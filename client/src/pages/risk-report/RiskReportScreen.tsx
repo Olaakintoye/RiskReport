@@ -19,6 +19,7 @@ import axios from 'axios';
 // Import services
 import portfolioService, { Portfolio, PortfolioSummary } from '../../services/portfolioService';
 import riskService, { VaRParams, VaRResults, GreeksResults, RiskMetrics } from '../../services/riskService';
+import { ensurePortfolioSynced } from '../../services/supabaseSync';
 
 // Import components
 import MetricCard from '../../components/ui/MetricCard';
@@ -97,12 +98,12 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
                   borderRadius: 8,
                   paddingVertical: 10,
                   marginHorizontal: 4,
-                  backgroundColor: confidence === level ? '#273c75' : '#f8fafc',
+                  backgroundColor: confidence === level ? '#000000' : '#f8fafc',
                   alignItems: 'center',
                 }}
                 onPress={() => setConfidence(level)}
               >
-                <Text style={{ color: confidence === level ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{Math.round(level * 100)}%</Text>
+                <Text style={{ color: confidence === level ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{Math.round(level * 100)}%</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -119,12 +120,12 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
                   borderRadius: 8,
                   paddingVertical: 10,
                   marginHorizontal: 4,
-                  backgroundColor: horizon === days ? '#273c75' : '#f8fafc',
+                  backgroundColor: horizon === days ? '#000000' : '#f8fafc',
                   alignItems: 'center',
                 }}
                 onPress={() => setHorizon(days)}
               >
-                <Text style={{ color: horizon === days ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{days} day{days > 1 ? 's' : ''}</Text>
+                <Text style={{ color: horizon === days ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{days} day{days > 1 ? 's' : ''}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -142,12 +143,12 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
                   borderRadius: 8,
                   paddingVertical: 10,
                   marginHorizontal: 4,
-                  backgroundColor: lookbackPeriod === years ? '#273c75' : '#f8fafc',
+                  backgroundColor: lookbackPeriod === years ? '#000000' : '#f8fafc',
                   alignItems: 'center',
                 }}
                 onPress={() => setLookbackPeriod(years)}
               >
-                <Text style={{ color: lookbackPeriod === years ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{years} year{years > 1 ? 's' : ''}</Text>
+                <Text style={{ color: lookbackPeriod === years ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{years} year{years > 1 ? 's' : ''}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -397,6 +398,16 @@ const RiskReportScreen: React.FC = () => {
 
     try {
       setRunningPythonAnalysis(true);
+      
+      // 🔄 CRITICAL: Ensure portfolio is synced to Supabase BEFORE running VaR
+      console.log('📤 Ensuring portfolio is synced to Supabase...');
+      const isSynced = await ensurePortfolioSynced(selectedPortfolio);
+      if (!isSynced) {
+        Alert.alert('Sync Error', 'Failed to sync portfolio to database. Please check your connection and try again.');
+        setRunningPythonAnalysis(false);
+        return;
+      }
+      console.log('✅ Portfolio synced successfully');
       
       // Calculate the portfolio value directly from assets
       const portfolioValue = selectedPortfolio.assets.reduce(

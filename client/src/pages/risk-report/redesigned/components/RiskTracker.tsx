@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   },
   viewMoreText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#000000',
     marginRight: 4,
   },
   scoreCard: {

@@ -113,7 +113,7 @@ const PortfolioCompositionCard: React.FC<PortfolioCompositionCardProps> = ({ com
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Portfolio Composition</Text>
         <TouchableOpacity onPress={onViewMore}>
-          <MaterialCommunityIcons name="arrow-right" size={24} color="#007AFF" />
+          <MaterialCommunityIcons name="arrow-right" size={24} color="#000000" />
         </TouchableOpacity>
       </View>
       
@@ -249,9 +249,9 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
             {CONFIDENCE_LEVELS.map(level => (
               <TouchableOpacity key={level} 
                 style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingVertical: 10, 
-                marginHorizontal: 4, backgroundColor: confidence === level ? '#273c75' : '#f8fafc', alignItems: 'center' }}
+                marginHorizontal: 4, backgroundColor: confidence === level ? '#000000' : '#f8fafc', alignItems: 'center' }}
                 onPress={() => setConfidence(level)}>
-                <Text style={{ color: confidence === level ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{Math.round(level * 100)}%</Text>
+                <Text style={{ color: confidence === level ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{Math.round(level * 100)}%</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -262,9 +262,9 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
             {TIME_HORIZONS.map(days => (
               <TouchableOpacity key={days}
                 style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingVertical: 10, 
-                marginHorizontal: 4, backgroundColor: horizon === days ? '#273c75' : '#f8fafc', alignItems: 'center' }}
+                marginHorizontal: 4, backgroundColor: horizon === days ? '#000000' : '#f8fafc', alignItems: 'center' }}
                 onPress={() => setHorizon(days)}>
-                <Text style={{ color: horizon === days ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{days} day{days > 1 ? 's' : ''}</Text>
+                <Text style={{ color: horizon === days ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{days} day{days > 1 ? 's' : ''}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -275,9 +275,9 @@ const VarAnalysisModal: React.FC<VarAnalysisModalProps> = ({
             {LOOKBACK_PERIODS.map(years => (
               <TouchableOpacity key={years}
                 style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingVertical: 10, 
-                marginHorizontal: 4, backgroundColor: lookbackPeriod === years ? '#273c75' : '#f8fafc', alignItems: 'center' }}
+                marginHorizontal: 4, backgroundColor: lookbackPeriod === years ? '#000000' : '#f8fafc', alignItems: 'center' }}
                 onPress={() => setLookbackPeriod(years)}>
-                <Text style={{ color: lookbackPeriod === years ? '#fff' : '#273c75', fontWeight: '600', fontSize: 15 }}>{years} year{years > 1 ? 's' : ''}</Text>
+                <Text style={{ color: lookbackPeriod === years ? '#fff' : '#000000', fontWeight: '600', fontSize: 15 }}>{years} year{years > 1 ? 's' : ''}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -696,10 +696,12 @@ const RiskReportScreen: React.FC = () => {
             const pythonResults: VaRResults = {
               portfolioValue: originalPortfolioValue, // Use stored original value
               varValue: Number(response.results?.var ?? vrForKey.var ?? 0),
-              varPercentage: Number(response.results?.varPercentage ?? vrForKey.var_pct ?? 0),
+              varPercentage: Number(response.results?.var_percentage ?? response.results?.varPercentage ?? vrForKey.var_pct ?? 0),
               cvarValue: Number(response.results?.cvar ?? vrForKey.cvar ?? 0),
-              cvarPercentage: Number(response.results?.cvarPercentage ?? vrForKey.cvar_pct ?? 0),
-              chartImageUrl: response.chartUrl || undefined,
+              cvarPercentage: Number(response.results?.cvar_percentage ?? response.results?.cvarPercentage ?? vrForKey.cvar_pct ?? 0),
+              chartImageUrl: response.chartBase64 
+                ? `data:image/png;base64,${response.chartBase64}` 
+                : (response.chartUrl || undefined),
               parameters: {
                 confidenceLevel: confidenceLevel.toString(),
                 timeHorizon: timeHorizon,
