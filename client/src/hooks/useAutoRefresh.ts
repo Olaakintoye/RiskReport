@@ -20,6 +20,16 @@ export const useAutoRefresh = ({
 }: UseAutoRefreshOptions) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const onRefreshRef = useRef(onRefresh);
+  const intervalRefValue = useRef(interval);
+  const respectMarketHoursRef = useRef(respectMarketHours);
+  
+  // Update refs when props change
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+    intervalRefValue.current = interval;
+    respectMarketHoursRef.current = respectMarketHours;
+  }, [onRefresh, interval, respectMarketHours]);
 
   /**
    * Check if current time is within market hours (9:30 AM - 4:00 PM ET)
@@ -56,11 +66,11 @@ export const useAutoRefresh = ({
     }
 
     intervalRef.current = setInterval(() => {
-      if (appStateRef.current === 'active' && (isMarketHours() || !respectMarketHours)) {
-        onRefresh();
+      if (appStateRef.current === 'active' && (isMarketHours() || respectMarketHoursRef.current)) {
+        onRefreshRef.current();
       }
-    }, interval);
-  }, [interval, onRefresh, isMarketHours, respectMarketHours]);
+    }, intervalRefValue.current);
+  }, []);
 
   /**
    * Stop the auto-refresh interval
@@ -78,17 +88,27 @@ export const useAutoRefresh = ({
   const handleAppStateChange = useCallback((nextAppState: AppStateStatus) => {
     appStateRef.current = nextAppState;
 
-    if (nextAppState === 'active' && enabled) {
+    if (nextAppState === 'active') {
       // App came to foreground, trigger immediate refresh and restart interval
-      if (isMarketHours() || !respectMarketHours) {
-        onRefresh();
+      if (isMarketHours() || respectMarketHoursRef.current) {
+        onRefreshRef.current();
       }
-      startRefresh();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      intervalRef.current = setInterval(() => {
+        if (appStateRef.current === 'active' && (isMarketHours() || respectMarketHoursRef.current)) {
+          onRefreshRef.current();
+        }
+      }, intervalRefValue.current);
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       // App went to background, stop refreshing to save battery and API calls
-      stopRefresh();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
-  }, [enabled, onRefresh, startRefresh, stopRefresh, isMarketHours, respectMarketHours]);
+  }, [isMarketHours]);
 
   useEffect(() => {
     if (!enabled) {
@@ -97,8 +117,8 @@ export const useAutoRefresh = ({
     }
 
     // Initial refresh when component mounts
-    if (isMarketHours() || !respectMarketHours) {
-      onRefresh();
+    if (isMarketHours() || respectMarketHoursRef.current) {
+      onRefreshRef.current();
     }
 
     // Start auto-refresh interval
@@ -112,7 +132,7 @@ export const useAutoRefresh = ({
       stopRefresh();
       subscription?.remove();
     };
-  }, [enabled, startRefresh, stopRefresh, handleAppStateChange, onRefresh, isMarketHours, respectMarketHours]);
+  }, [enabled, startRefresh, stopRefresh, handleAppStateChange, isMarketHours]);
 
   return {
     isMarketHours: isMarketHours(),

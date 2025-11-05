@@ -138,25 +138,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    height: 60,
-    paddingHorizontal: 16,
+    height: 56, // iOS standard height with labels
+    paddingHorizontal: 16, // iOS standard side margin
+    paddingTop: 8, // iOS standard top padding
+    paddingBottom: 8, // iOS standard bottom padding with safe area
     alignItems: 'center',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 4, // Additional internal padding
   },
   iconContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6, // iOS standard spacing between icon and text
   },
   label: {
     fontSize: 12,
     textAlign: 'center',
-    marginBottom: 4,
+    marginTop: 0, // No bottom margin, spacing handled by iconContainer
   },
   badge: {
     position: 'absolute',

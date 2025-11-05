@@ -34,6 +34,9 @@ import { AlertHistoryItem } from '../../../services/notificationService';
 // Define route type for navigation params
 type RiskReportScreenRouteProp = RouteProp<RootStackParamList, 'Var'>;
 
+// Import spacing constants
+import SPACING from '../../../constants/spacing';
+
 // Import components
 import PortfolioSelector from './components/PortfolioSelector';
 import RiskOverview from './components/RiskOverview';
@@ -1034,17 +1037,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F7' },
   headerContainer: {
     backgroundColor: 'rgba(245, 245, 247, 0.98)', paddingTop: Platform.OS === 'ios' ? 50 : 25,
-    paddingBottom: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
+    paddingBottom: 10, paddingHorizontal: SPACING.screenPadding, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 3, zIndex: 100,
   },
-  appTitle: { fontSize: 28, fontWeight: '700', color: '#000', marginBottom: 16 },
+  appTitle: { fontSize: 28, fontWeight: '700', color: '#000', marginBottom: SPACING.md },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: SPACING.screenPadding, paddingBottom: 40 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F7' },
-  loadingText: { marginTop: 16, fontSize: 16, color: '#8E8E93' },
+  loadingText: { marginTop: SPACING.md, fontSize: 16, color: '#8E8E93' },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 50 : 25,
-    paddingBottom: 15, paddingHorizontal: 16, backgroundColor: '#F5F5F7',
+    paddingBottom: 15, paddingHorizontal: SPACING.screenPadding, backgroundColor: '#F5F5F7',
     borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   backButton: { flexDirection: 'row', alignItems: 'center' },
@@ -1060,10 +1063,10 @@ const styles = StyleSheet.create({
   // Portfolio Composition Card Styles
   card: {
     backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginVertical: 8,
+    marginHorizontal: SPACING.screenPadding,
+    marginVertical: SPACING.sm,
     borderRadius: 12,
-    padding: 16,
+    padding: SPACING.cardPadding,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1074,7 +1077,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   cardTitle: {
     fontSize: 18,
@@ -1092,7 +1095,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   compositionContent: {
-    gap: 16,
+    gap: SPACING.md,
   },
   compositionSummary: {
     flexDirection: 'row',
@@ -1113,13 +1116,13 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   assetClassBreakdown: {
-    gap: 8,
+    gap: SPACING.sm,
   },
   subsectionTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   assetClassRow: {
     flexDirection: 'row',

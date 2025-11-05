@@ -44,6 +44,9 @@ import MarketContextCard from '../../../components/portfolio/MarketContextCard';
 // Import Portfolio type from service
 import type { Portfolio as PortfolioType } from '../../../services/portfolioService';
 
+// Import spacing constants
+import SPACING from '../../../constants/spacing';
+
 // Define additional UI types
 interface Portfolio extends Omit<PortfolioType, 'assets'> {
   totalValue: number;
@@ -124,10 +127,17 @@ export default function DashboardScreen() {
   // Auth context
   const { user } = useAuth();
   
-  // React Query hooks for data fetching
+  // React Query hooks for data fetching - optimized with sequential loading
+  // Load portfolios first (critical data)
   const { data: portfolios = [], isLoading: portfoliosLoading, refetch: refetchPortfolios } = usePortfolios();
+  
+  // Load summaries only after portfolios are loaded
   const { data: portfolioSummaries = [], isLoading: summariesLoading } = usePortfolioSummaries();
+  
+  // Load full portfolios with prices after summaries (defer heavy API calls)
   const { data: fullPortfolios = [], isLoading: fullPortfoliosLoading } = usePortfoliosWithPrices();
+  
+  // Load scenarios and runs only when portfolios are available (non-critical data)
   const { data: scenarios = [], isLoading: scenariosLoading } = useScenarios();
   const { data: scenarioRuns = [], isLoading: runsLoading } = useScenarioRuns();
 
@@ -1898,7 +1908,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 12,
+    paddingTop: SPACING.sm,
   },
   loadingContainer: {
     flex: 1,
@@ -1907,7 +1917,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F7',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: SPACING.sm,
     fontSize: 16,
     color: '#8E8E93',
     fontWeight: '500',
@@ -1933,9 +1943,9 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   header: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenPadding,
     paddingTop: Platform.OS === 'ios' ? 40 : 10,
-    paddingBottom: 12,
+    paddingBottom: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1954,11 +1964,11 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   card: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: SPACING.screenPadding,
+    marginBottom: SPACING.cardGap,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: SPACING.cardPadding,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1969,7 +1979,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   cardTitle: {
     fontSize: 18,
@@ -2011,9 +2021,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 28,
-    marginBottom: 12,
+    paddingHorizontal: SPACING.screenPadding,
+    marginTop: SPACING.sectionTop,
+    marginBottom: SPACING.sectionBottom,
   },
   sectionTitle: {
     fontSize: 18,
@@ -2029,13 +2039,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   portfolioCardsContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.screenPadding,
   },
   portfolioCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    padding: SPACING.cardPadding,
+    marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
@@ -2078,7 +2088,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACING.sm,
   },
   riskMetricName: {
     fontSize: 14,

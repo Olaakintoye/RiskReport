@@ -22,10 +22,12 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes default stale time
       gcTime: 10 * 60 * 1000, // 10 minutes garbage collection time
-      refetchOnWindowFocus: false, // Don't refetch on window focus by default
-      refetchOnMount: true, // Refetch on mount if data is stale
-      retry: 2, // Retry failed requests twice
+      refetchOnWindowFocus: false, // Don't refetch on window focus
+      refetchOnMount: false, // Don't refetch on mount (use cached data)
+      refetchOnReconnect: false, // Don't refetch on reconnect
+      retry: 1, // Reduced retry attempts for faster failures
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+      notifyOnChangeProps: 'all', // Better change detection
     },
     mutations: {
       retry: 1, // Retry mutations once

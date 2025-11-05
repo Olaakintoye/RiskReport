@@ -32,6 +32,7 @@ echo "🔄 Starting Backend Servers..."
 
 # Start VaR Analysis Server (Port 3001)
 echo "Starting VaR Analysis Server on port 3001..."
+
 ./start-backend.sh &
 sleep 3
 

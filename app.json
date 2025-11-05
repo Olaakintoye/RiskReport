@@ -17,6 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ola.CDInvestmentPro",
       "buildNumber": "1",
+      "jsEngine": "hermes",
+      "deploymentTarget": "15.1",
       "associatedDomains": ["applinks:cdinvestmentpro.com"],
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -52,6 +54,15 @@
         "expo-image-picker",
         {
           "photosPermission": "The app accesses your photos to let you share them with your friends."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "deploymentTarget": "15.1"
+          }
         }
       ]
     ],

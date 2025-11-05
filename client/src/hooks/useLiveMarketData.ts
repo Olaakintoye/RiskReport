@@ -102,15 +102,18 @@ export const useLiveMarketData = (options: UseLiveMarketDataOptions = {}) => {
       // Get market indicators from real service
       const indicators = await getMarketIndicators();
       
+      // Get current symbols from ref
+      const symbols = normalizedSymbols;
+      
       // Filter to requested symbols if specified
       const filteredIndicators = symbols.length > 0 ? 
         indicators.filter(indicator => 
-          normalizedSymbols.some(s => s.symbol === indicator.symbol)
+          symbols.some(s => s.symbol === indicator.symbol)
         ) : indicators;
       
       // Map to include the display names
       const indicatorsWithNames = filteredIndicators.map(indicator => {
-        const symbolInfo = normalizedSymbols.find(s => s.symbol === indicator.symbol);
+        const symbolInfo = symbols.find(s => s.symbol === indicator.symbol);
         return {
           ...indicator,
           name: symbolInfo?.name || indicator.name
@@ -138,7 +141,10 @@ export const useLiveMarketData = (options: UseLiveMarketDataOptions = {}) => {
 
   // Start live updates
   const startLiveUpdates = useCallback(() => {
-    if (state.isLive) return;
+    if (intervalRef.current) {
+      console.log('🔄 Updates already running');
+      return;
+    }
 
     console.log('🔄 Starting live updates with interval:', refreshInterval, 'ms');
 
@@ -152,7 +158,7 @@ export const useLiveMarketData = (options: UseLiveMarketDataOptions = {}) => {
     }, refreshInterval);
 
     setState(prev => ({ ...prev, isLive: true }));
-  }, [state.isLive]);
+  }, [refreshInterval, fetchMarketData]);
 
   // Stop live updates
   const stopLiveUpdates = useCallback(() => {
@@ -167,36 +173,55 @@ export const useLiveMarketData = (options: UseLiveMarketDataOptions = {}) => {
 
   // Toggle live updates
   const toggleLiveUpdates = useCallback(() => {
-    if (state.isLive) {
+    if (intervalRef.current) {
       stopLiveUpdates();
     } else {
       startLiveUpdates();
     }
-  }, [state.isLive]);
+  }, [startLiveUpdates, stopLiveUpdates]);
 
   // Manual refresh
   const refresh = useCallback(() => {
     fetchMarketData();
   }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount and auto-start
   useEffect(() => {
-    if (autoStart) {
+    if (!autoStart) return;
+
+    if (!intervalRef.current) {
+      console.log('🔄 Auto-starting live updates');
       startLiveUpdates();
     }
 
     return () => {
-      stopLiveUpdates();
+      console.log('🧹 Cleaning up live updates');
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setState(prev => ({ ...prev, isLive: false }));
     };
   }, [autoStart]);
 
-  // Update refresh interval when it changes
+  // Update refresh interval when it changes - only if already running
+  const lastIntervalRef = useRef(refreshInterval);
   useEffect(() => {
-    if (state.isLive && intervalRef.current) {
+    if (lastIntervalRef.current === refreshInterval) return;
+    
+    if (intervalRef.current) {
+      console.log('🔄 Restarting live updates with new interval:', refreshInterval);
       stopLiveUpdates();
-      startLiveUpdates();
+      // Start with a small delay to avoid race condition
+      const timeoutId = setTimeout(() => {
+        startLiveUpdates();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [refreshInterval, state.isLive]);
+    
+    lastIntervalRef.current = refreshInterval;
+  }, [refreshInterval]);
 
   return {
     ...state,

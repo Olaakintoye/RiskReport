@@ -20,7 +20,18 @@ config.transformer = {
     mangle: {
       keep_fnames: true,
     },
+    compress: {
+      drop_console: process.env.NODE_ENV === 'production', // Remove console.logs in production
+      dead_code: true,
+    },
   },
+  // Critical iOS performance optimization
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true, // Inline require() calls for better iOS performance
+    },
+  }),
 };
 
 // Configure resolver with performance optimizations

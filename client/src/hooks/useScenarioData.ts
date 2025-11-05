@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { getScenarios, getScenarioById, getScenarioRuns } from '../services/scenarioService';
 
 /**
  * Hook to fetch all scenarios
+ * Optimized with longer stale time and placeholderData
  */
 export function useScenarios() {
   return useQuery({
@@ -16,12 +17,14 @@ export function useScenarios() {
         return [];
       }
     },
-    staleTime: 60000, // 1 minute
+    staleTime: 5 * 60 * 1000, // 5 minutes - scenarios change infrequently
+    placeholderData: keepPreviousData,
   });
 }
 
 /**
  * Hook to fetch scenario runs
+ * Optimized with longer stale time and caching
  */
 export function useScenarioRuns() {
   return useQuery({
@@ -35,12 +38,14 @@ export function useScenarioRuns() {
         return [];
       }
     },
-    staleTime: 60000, // 1 minute
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    placeholderData: keepPreviousData,
   });
 }
 
 /**
  * Hook to fetch a single scenario by ID
+ * Optimized with placeholderData for smooth navigation
  */
 export function useScenario(scenarioId: string | null) {
   return useQuery({
@@ -56,12 +61,14 @@ export function useScenario(scenarioId: string | null) {
       }
     },
     enabled: !!scenarioId,
-    staleTime: 60000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    placeholderData: keepPreviousData,
   });
 }
 
 /**
  * Hook to fetch scenario runs for a specific portfolio
+ * Optimized with better caching and placeholderData
  */
 export function usePortfolioScenarioRuns(portfolioId: string | null) {
   return useQuery({
@@ -78,7 +85,8 @@ export function usePortfolioScenarioRuns(portfolioId: string | null) {
       }
     },
     enabled: !!portfolioId,
-    staleTime: 60000,
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    placeholderData: keepPreviousData,
   });
 }
 

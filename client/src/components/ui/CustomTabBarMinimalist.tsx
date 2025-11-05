@@ -105,17 +105,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAF8',
     elevation: 0,
     shadowOpacity: 0,
-    height: 60,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    height: 56, // iOS standard height
+    paddingHorizontal: 16, // iOS standard side margin (reduced from 24)
+    paddingTop: 8, // iOS standard top padding
+    paddingBottom: 8, // iOS standard bottom padding with safe area
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 40,
-    height: 40,
+    width: 44, // iOS minimum touch target (44x44)
+    height: 44, // iOS minimum touch target (44x44)
   },
   createButton: {
     alignItems: 'center',

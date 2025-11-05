@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -144,9 +144,10 @@ const EnhancedPortfolioScreen: React.FC = () => {
     }
   };
 
-  // Auto-refresh portfolios every 10 minutes
+  // Auto-refresh portfolios every 5 minutes (reduced from 10 for better UX)
+  // Only enabled when screen is visible and not loading
   useAutoRefresh({
-    interval: 10 * 60 * 1000, // 10 minutes
+    interval: 5 * 60 * 1000, // 5 minutes
     enabled: !loading,
     onRefresh: refreshPortfolios,
     respectMarketHours: true
@@ -265,19 +266,39 @@ const EnhancedPortfolioScreen: React.FC = () => {
     }
   };
 
-  // Handle search
-  const handleSearch = (text: string) => {
+  // Debounce timer ref for search
+  const searchDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // Handle search with debouncing (300ms) for better performance
+  const handleSearch = useCallback((text: string) => {
     setSearchQuery(text);
     
-    if (text.trim() === '') {
-      setFilteredPortfolios(portfolios);
-    } else {
-      const filtered = portfolios.filter(portfolio =>
-        portfolio.name.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredPortfolios(filtered);
+    // Clear existing timer
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
     }
-  };
+    
+    // Debounce the filtering
+    searchDebounceTimer.current = setTimeout(() => {
+      if (text.trim() === '') {
+        setFilteredPortfolios(portfolios);
+      } else {
+        const filtered = portfolios.filter(portfolio =>
+          portfolio.name.toLowerCase().includes(text.toLowerCase())
+        );
+        setFilteredPortfolios(filtered);
+      }
+    }, 300); // 300ms debounce
+  }, [portfolios]);
+  
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+    };
+  }, []);
 
   // Toggle view mode
   const toggleViewMode = () => {
@@ -531,7 +552,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: SPACING.md,
     fontSize: 16,
     color: '#64748b',
   },
@@ -539,9 +560,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: SPACING.screenPadding,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
@@ -609,8 +630,8 @@ const styles = StyleSheet.create({
   },
   summaryContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: SPACING.screenPadding,
+    paddingVertical: SPACING.md,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',

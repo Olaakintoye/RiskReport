@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import tiingoService from './tiingoService';
 import { v4 as uuidv4 } from '../utils/uuid';
 import { syncPortfolioToSupabase, deletePortfolioFromSupabase } from './supabaseSync';
+import { supabase } from '../lib/supabase';
 
 // Define types for portfolio data
 export interface Asset {
@@ -297,20 +298,127 @@ const createPortfolioSummary = (portfolio: Portfolio): PortfolioSummary => {
 };
 
 /**
- * Initialize portfolios in storage with sample data if needed
+ * Load portfolios from Supabase for the current authenticated user
+ */
+const loadPortfoliosFromSupabase = async (): Promise<Portfolio[]> => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.log('No authenticated user, returning empty portfolios');
+      return [];
+    }
+
+    console.log(`[PortfolioService] Loading portfolios for user: ${user.id}`);
+
+    // Fetch portfolios with their positions
+    const { data: portfoliosData, error: portfoliosError } = await supabase
+      .from('portfolios')
+      .select(`
+        id,
+        name,
+        description,
+        base_ccy,
+        total_value,
+        created_at,
+        updated_at,
+        positions (
+          id,
+          symbol,
+          asset_name,
+          asset_type,
+          quantity,
+          last_price,
+          currency,
+          sector
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (portfoliosError) {
+      console.error('Error fetching portfolios from Supabase:', portfoliosError);
+      return [];
+    }
+
+    if (!portfoliosData || portfoliosData.length === 0) {
+      console.log('No portfolios found for user');
+      return [];
+    }
+
+    // Transform Supabase data to Portfolio format
+    const portfolios: Portfolio[] = portfoliosData.map(portfolio => ({
+      id: portfolio.id,
+      name: portfolio.name,
+      description: portfolio.description || undefined,
+      createdAt: portfolio.created_at,
+      updatedAt: portfolio.updated_at,
+      assets: portfolio.positions?.map(position => ({
+        id: position.id,
+        symbol: position.symbol,
+        name: position.asset_name || position.symbol,
+        quantity: position.quantity,
+        price: position.last_price || 0,
+        assetClass: mapAssetTypeToClass(position.asset_type)
+      })) || []
+    }));
+
+    console.log(`[PortfolioService] Loaded ${portfolios.length} portfolios from Supabase`);
+    
+    // Cache in AsyncStorage for offline access
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(portfolios));
+    
+    return portfolios;
+  } catch (error) {
+    console.error('Error loading portfolios from Supabase:', error);
+    return [];
+  }
+};
+
+/**
+ * Map Supabase asset_type to our Asset assetClass
+ */
+const mapAssetTypeToClass = (assetType: string): Asset['assetClass'] => {
+  switch (assetType) {
+    case 'equity':
+      return 'equity';
+    case 'bond':
+      return 'bond';
+    case 'commodity':
+      return 'commodity';
+    case 'crypto':
+      return 'alternative';
+    case 'etf':
+      return 'equity'; // ETFs are typically equity-like
+    case 'option':
+    case 'future':
+      return 'alternative';
+    default:
+      return 'equity';
+  }
+};
+
+/**
+ * Clear portfolio cache - useful when user logs out or switches accounts
+ */
+const clearPortfolioCache = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    console.log('[PortfolioService] Portfolio cache cleared');
+  } catch (error) {
+    console.error('Error clearing portfolio cache:', error);
+  }
+};
+
+/**
+ * Initialize portfolios - no longer seeds with sample data
  */
 const initializePortfolios = async (): Promise<void> => {
   try {
+    // Just ensure storage key exists, no sample data seeding
     const existingPortfolios = await AsyncStorage.getItem(STORAGE_KEY);
-    
     if (!existingPortfolios) {
-      // Seed with samples but always assign fresh UUIDs for portfolio and asset IDs
-      const seeded: Portfolio[] = SAMPLE_PORTFOLIOS.map(sample => ({
-        ...sample,
-        id: uuidv4(),
-        assets: sample.assets.map(a => ({ ...a, id: uuidv4() }))
-      }));
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     }
   } catch (error) {
     console.error('Error initializing portfolios:', error);
@@ -318,15 +426,34 @@ const initializePortfolios = async (): Promise<void> => {
 };
 
 /**
- * Get all portfolios
+ * Get all portfolios - now uses Supabase as primary source
  */
 const getPortfolios = async (): Promise<Portfolio[]> => {
   try {
+    // Check if user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (!userError && user) {
+      // User is authenticated - ALWAYS use Supabase (even if empty)
+      console.log('[PortfolioService] Authenticated user detected, loading from Supabase');
+      const supabasePortfolios = await loadPortfoliosFromSupabase();
+      return supabasePortfolios; // Return even if empty array
+    }
+    
+    // User is not authenticated - fallback to AsyncStorage for offline access
+    console.log('[PortfolioService] No authenticated user, falling back to AsyncStorage');
     const portfoliosJson = await AsyncStorage.getItem(STORAGE_KEY);
     return portfoliosJson ? JSON.parse(portfoliosJson) : [];
   } catch (error) {
     console.error('Error getting portfolios:', error);
-    return [];
+    // Fallback to AsyncStorage on error
+    try {
+      const portfoliosJson = await AsyncStorage.getItem(STORAGE_KEY);
+      return portfoliosJson ? JSON.parse(portfoliosJson) : [];
+    } catch (fallbackError) {
+      console.error('Error getting portfolios from AsyncStorage fallback:', fallbackError);
+      return [];
+    }
   }
 };
 
@@ -810,5 +937,6 @@ export default {
   refreshAllPortfolios,
   updatePortfolioRiskProfile,
   getPortfolioVaRLimit,
-  importPortfolioFromCSV
+  importPortfolioFromCSV,
+  clearPortfolioCache
 }; 

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Portfolio } from './portfolioService';
 import quantitativeStressTestService from './quantitativeStressTestService';
+import { supabase } from '../lib/supabase';
 
 // ==========================================
 // SCENARIO MANAGEMENT SYSTEM
@@ -746,10 +747,18 @@ export class ScenarioManagementService {
   }
 
   /**
-   * Save scenario run
+   * Save scenario run - now saves to Supabase and AsyncStorage
    */
   private async saveScenarioRun(run: ScenarioRun): Promise<void> {
     try {
+      // Save to Supabase first
+      const saved = await this.saveScenarioRunToSupabase(run);
+      
+      if (!saved) {
+        console.warn('[ScenarioManager] Failed to save to Supabase, saving to AsyncStorage only');
+      }
+      
+      // Also save to AsyncStorage for offline access
       const existing = await AsyncStorage.getItem(STORAGE_KEYS.SCENARIO_RUNS);
       const runs = existing ? JSON.parse(existing) : [];
       runs.unshift(run); // Add to beginning
@@ -780,16 +789,170 @@ export class ScenarioManagementService {
   }
 
   /**
-   * Get scenario runs
+   * Load scenario runs from Supabase for the current authenticated user
+   */
+  private async loadScenarioRunsFromSupabase(): Promise<ScenarioRun[]> {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.log('[ScenarioManager] No authenticated user, returning empty runs');
+        return [];
+      }
+
+      console.log(`[ScenarioManager] Loading scenario runs for user: ${user.id}`);
+
+      // Query stress_test_results joined with portfolios and scenarios
+      const { data: resultsData, error: resultsError } = await supabase
+        .from('stress_test_results')
+        .select(`
+          id,
+          portfolio_id,
+          scenario_id,
+          base_value,
+          stressed_value,
+          pnl_amount,
+          pnl_percentage,
+          component_results,
+          created_at,
+          portfolios!inner (
+            id,
+            name,
+            user_id
+          ),
+          stress_scenarios (
+            id,
+            name,
+            description,
+            scenario_type,
+            parameters
+          )
+        `)
+        .eq('portfolios.user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (resultsError) {
+        console.error('[ScenarioManager] Error fetching scenario runs from Supabase:', resultsError);
+        return [];
+      }
+
+      if (!resultsData || resultsData.length === 0) {
+        console.log('[ScenarioManager] No scenario runs found for user');
+        return [];
+      }
+
+      // Transform Supabase data to ScenarioRun format
+      const scenarioRuns: ScenarioRun[] = resultsData.map((result: any) => {
+        const componentResults = result.component_results || {};
+        
+        return {
+          id: result.id,
+          scenarioId: result.scenario_id || 'unknown',
+          portfolioId: result.portfolio_id,
+          timestamp: result.created_at,
+          results: {
+            portfolioValue: result.base_value || 0,
+            stressedValue: result.stressed_value || 0,
+            totalImpact: result.pnl_amount || 0,
+            totalImpactPercent: result.pnl_percentage || 0,
+            assetClassImpacts: componentResults.assetClassImpacts || {},
+            factorAttribution: componentResults.factorAttribution || {},
+            riskMetrics: componentResults.riskMetrics || {
+              concentration: 0,
+              diversification: 0,
+              leverageEffect: 0
+            },
+            positionResults: componentResults.positionResults || []
+          }
+        };
+      });
+
+      console.log(`[ScenarioManager] Loaded ${scenarioRuns.length} scenario runs from Supabase`);
+      
+      // Cache in AsyncStorage for offline access
+      await AsyncStorage.setItem(STORAGE_KEYS.SCENARIO_RUNS, JSON.stringify(scenarioRuns));
+      
+      return scenarioRuns;
+    } catch (error) {
+      console.error('[ScenarioManager] Error loading scenario runs from Supabase:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Save scenario run to Supabase
+   */
+  private async saveScenarioRunToSupabase(run: ScenarioRun): Promise<boolean> {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('[ScenarioManager] Cannot save run - user not authenticated');
+        return false;
+      }
+
+      // Insert into stress_test_results table
+      const { error: insertError } = await supabase
+        .from('stress_test_results')
+        .insert({
+          id: run.id,
+          portfolio_id: run.portfolioId,
+          scenario_id: run.scenarioId,
+          base_value: run.results.portfolioValue,
+          stressed_value: run.results.stressedValue,
+          component_results: {
+            assetClassImpacts: run.results.assetClassImpacts,
+            factorAttribution: run.results.factorAttribution,
+            riskMetrics: run.results.riskMetrics,
+            positionResults: run.results.positionResults
+          },
+          created_at: run.timestamp
+        });
+
+      if (insertError) {
+        console.error('[ScenarioManager] Error saving run to Supabase:', insertError);
+        return false;
+      }
+
+      console.log(`[ScenarioManager] ✅ Scenario run saved to Supabase: ${run.id}`);
+      return true;
+    } catch (error) {
+      console.error('[ScenarioManager] Error in saveScenarioRunToSupabase:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get scenario runs - now uses Supabase as primary source
    */
   async getScenarioRuns(limit?: number): Promise<ScenarioRun[]> {
     try {
+      // Check if user is authenticated
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (!userError && user) {
+        // User is authenticated - ALWAYS use Supabase (even if empty)
+        console.log('[ScenarioManager] Authenticated user detected, loading from Supabase');
+        const supabaseRuns = await this.loadScenarioRunsFromSupabase();
+        return limit ? supabaseRuns.slice(0, limit) : supabaseRuns;
+      }
+      
+      // User is not authenticated - fallback to AsyncStorage for offline access
+      console.log('[ScenarioManager] No authenticated user, falling back to AsyncStorage');
       const runs = await AsyncStorage.getItem(STORAGE_KEYS.SCENARIO_RUNS);
       const allRuns = runs ? JSON.parse(runs) : [];
       return limit ? allRuns.slice(0, limit) : allRuns;
     } catch (error) {
       console.error('Error loading scenario runs:', error);
-      return [];
+      // Fallback to AsyncStorage on error
+      try {
+        const runs = await AsyncStorage.getItem(STORAGE_KEYS.SCENARIO_RUNS);
+        const allRuns = runs ? JSON.parse(runs) : [];
+        return limit ? allRuns.slice(0, limit) : allRuns;
+      } catch (fallbackError) {
+        console.error('Error loading from AsyncStorage fallback:', fallbackError);
+        return [];
+      }
     }
   }
 
