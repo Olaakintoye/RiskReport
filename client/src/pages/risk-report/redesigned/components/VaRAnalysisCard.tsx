@@ -813,19 +813,8 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
       {(hasLoadedLastAnalysis || parametricVaR || runningPythonAnalysis) && (
         <View style={styles.chartContainer}>
         <View style={styles.chartPlaceholder}>
-          {/* Show placeholder message for loaded analysis without charts */}
-          {hasLoadedLastAnalysis && !runningPythonAnalysis && (
-            <View style={styles.previousAnalysisPlaceholder}>
-              <Ionicons name="bar-chart-outline" size={48} color="#94a3b8" />
-              <Text style={styles.previousAnalysisTitle}>Previous Analysis Loaded</Text>
-              <Text style={styles.previousAnalysisMessage}>
-                Charts from your last analysis. Run a new analysis to generate fresh charts with current data.
-              </Text>
-            </View>
-          )}
-          
           {/* Show actual charts when available */}
-          {!hasLoadedLastAnalysis && (
+          {(hasLoadedLastAnalysis || parametricVaR) && !runningPythonAnalysis && (
             <>
               {activeVarChart === 'parametric' && renderParametricImage}
               {activeVarChart === 'historical' && renderHistoricalImage}
@@ -835,8 +824,8 @@ const VaRAnalysisCard: React.FC<VaRAnalysisCardProps> = ({
           )}
         </View>
         
-        {/* Only show chart footer when we have actual charts, not placeholders */}
-        {!hasLoadedLastAnalysis && (
+        {/* Show chart footer when we have actual charts */}
+        {(hasLoadedLastAnalysis || parametricVaR) && !runningPythonAnalysis && (
           <View style={styles.chartFooter}>
             <Text style={styles.chartLabel}>
               {getChartDescription()}
