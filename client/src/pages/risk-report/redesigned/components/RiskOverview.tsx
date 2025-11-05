@@ -144,8 +144,12 @@ const RiskOverview: React.FC<RiskOverviewProps> = ({
       <View style={styles.metricsGrid}>
         <MetricItem
           title="Value at Risk (95%)"
-          value={`${parametricVaR?.varPercentage.toFixed(2) || '0.00'}%`}
-          subtitle={`$${varDollarAmount}`}
+          value={parametricVaR && parametricVaR.varPercentage > 0 
+            ? `${parametricVaR.varPercentage.toFixed(2)}%` 
+            : '—'}
+          subtitle={parametricVaR && parametricVaR.varPercentage > 0 
+            ? `$${varDollarAmount}` 
+            : 'Run analysis'}
           icon="trending-down"
           color="#FF3B30"
           onInfo={() => setInfoModal('Value at Risk (95%)')}
@@ -153,8 +157,12 @@ const RiskOverview: React.FC<RiskOverviewProps> = ({
         
         <MetricItem
           title="Annualised Volatility"
-          value={`${riskMetrics?.volatility.toFixed(2) || '0.00'}%`}
-          subtitle="Annualized"
+          value={riskMetrics?.volatility && riskMetrics.volatility > 0 
+            ? `${riskMetrics.volatility.toFixed(2)}%` 
+            : '—'}
+          subtitle={riskMetrics?.volatility && riskMetrics.volatility > 0 
+            ? "Annualized" 
+            : 'Run analysis'}
           icon="pulse"
           color="#FF9500"
           onInfo={() => setInfoModal('Volatility')}
@@ -162,8 +170,12 @@ const RiskOverview: React.FC<RiskOverviewProps> = ({
         
         <MetricItem
           title="Sharpe Ratio"
-          value={riskMetrics?.sharpeRatio.toFixed(2) || '0.00'}
-          subtitle="Risk-Adjusted Return"
+          value={riskMetrics?.sharpeRatio && riskMetrics.sharpeRatio !== 0 
+            ? riskMetrics.sharpeRatio.toFixed(2) 
+            : '—'}
+          subtitle={riskMetrics?.sharpeRatio && riskMetrics.sharpeRatio !== 0 
+            ? "Risk-Adjusted Return" 
+            : 'Run analysis'}
           icon="trending-up"
           color="#34C759"
           onInfo={() => setInfoModal('Sharpe Ratio')}
@@ -171,8 +183,12 @@ const RiskOverview: React.FC<RiskOverviewProps> = ({
         
         <MetricItem
           title="Beta"
-          value={riskMetrics?.beta.toFixed(2) || '0.00'}
-          subtitle="vs. Market"
+          value={riskMetrics?.beta && riskMetrics.beta !== 0 
+            ? riskMetrics.beta.toFixed(2) 
+            : '—'}
+          subtitle={riskMetrics?.beta && riskMetrics.beta !== 0 
+            ? "vs. Market" 
+            : 'Run analysis'}
           icon="analytics"
           color="#007AFF"
           onInfo={() => setInfoModal('Beta')}

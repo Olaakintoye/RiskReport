@@ -168,9 +168,16 @@ class RiskTrackingService {
         label = 'Beta';
       }
 
-      // If no historical data, return mock data for now
+      // If no historical data, return empty structure
       if (data.length === 0) {
-        return this.getMockTimeSeriesData(metricType, timeFrame);
+        return {
+          labels: [],
+          datasets: [{
+            label: label,
+            data: [],
+            color: () => color
+          }]
+        };
       }
 
       // Aggregate to proper period ends based on timeframe
@@ -194,8 +201,15 @@ class RiskTrackingService {
 
     } catch (error) {
       console.error('Error getting time series data:', error);
-      // Return mock data on error
-      return this.getMockTimeSeriesData(metricType, timeFrame);
+      // Return empty structure on error
+      return {
+        labels: [],
+        datasets: [{
+          label: metricType,
+          data: [],
+          color: () => '#007AFF'
+        }]
+      };
     }
   }
 
@@ -410,86 +424,8 @@ class RiskTrackingService {
     return 'medium';
   }
 
-  private getMockTimeSeriesData(metricType: string, timeFrame: string): RiskTrackingData {
-    // Fallback mock data when no historical data is available.
-    // Generate period-end dates and plausible values aligned to timeframe.
-    const now = new Date();
-
-    const { dates, labelFormatter } = (() => {
-      switch (timeFrame) {
-        case '1m': {
-          const count = 5; // up to 5 weekly points
-          const arr: Date[] = [];
-          for (let i = count - 1; i >= 0; i -= 1) {
-            arr.push(endOfWeek(subWeeks(now, i), { weekStartsOn: 1 }));
-          }
-          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM d') };
-        }
-        case '3m':
-        case '6m':
-        case '1y': {
-          const count = timeFrame === '3m' ? 3 : timeFrame === '6m' ? 6 : 12;
-          const arr: Date[] = [];
-          for (let i = count - 1; i >= 0; i -= 1) {
-            arr.push(endOfMonth(subMonths(now, i)));
-          }
-          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM') };
-        }
-        case 'all': {
-          const count = 3; // last 3 years
-          const arr: Date[] = [];
-          for (let i = count - 1; i >= 0; i -= 1) {
-            arr.push(endOfYear(subYears(now, i)));
-          }
-          return { dates: arr, labelFormatter: (d: Date) => format(d, 'yyyy') };
-        }
-        default: {
-          const arr = [endOfMonth(now)];
-          return { dates: arr, labelFormatter: (d: Date) => format(d, 'MMM d') };
-        }
-      }
-    })();
-
-    // Seed starting values by metric type (already in chart units)
-    let current = (() => {
-      switch (metricType) {
-        case 'var': return 2.8; // %
-        case 'volatility': return 18; // %
-        case 'sharpe_ratio': return 1.0;
-        case 'beta': return 0.95;
-        default: return 1;
-      }
-    })();
-
-    const values: number[] = dates.map((_d, idx) => {
-      // small drift and noise
-      const drift = metricType === 'sharpe_ratio' ? 0.02 : metricType === 'beta' ? -0.005 : -0.1;
-      const noise = (Math.random() - 0.5) * (metricType === 'sharpe_ratio' || metricType === 'beta' ? 0.08 : 0.6);
-      current = Math.max(0, current + (idx === 0 ? 0 : drift) + noise);
-      return parseFloat(current.toFixed(metricType === 'sharpe_ratio' || metricType === 'beta' ? 2 : 1));
-    });
-
-    const labels = dates.map(d => labelFormatter(d));
-
-    const color = (() => {
-      switch (metricType) {
-        case 'var': return '#FF3B30';
-        case 'volatility': return '#FF9500';
-        case 'sharpe_ratio': return '#34C759';
-        case 'beta': return '#007AFF';
-        default: return '#007AFF';
-      }
-    })();
-
-    return {
-      labels,
-      datasets: [{
-        label: metricType,
-        data: values,
-        color: () => color,
-      }],
-    };
-  }
+  // REMOVED: getMockTimeSeriesData() - No longer using mock data fallbacks
+  // Users should see empty states when no real data exists
 }
 
 export const riskTrackingService = new RiskTrackingService();

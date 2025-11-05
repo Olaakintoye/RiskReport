@@ -83,13 +83,13 @@ export interface ExpandedGreeksResults extends GreeksResults {
 }
 
 export interface RiskMetrics {
-  maxDrawdown: number;
-  volatility: number;
-  sharpeRatio: number;
-  beta: number;
-  sortinoRatio: number;
-  downsideDeviation: number;
-  treynorRatio?: number;
+  maxDrawdown: number | null;
+  volatility: number | null;
+  sharpeRatio: number | null;
+  beta: number | null;
+  sortinoRatio: number | null;
+  downsideDeviation: number | null;
+  treynorRatio?: number | null;
   calmarRatio?: number | null;
 }
 
@@ -538,13 +538,13 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
           console.log('Real risk metrics calculated successfully:', data.results);
           
           return {
-            maxDrawdown: data.results.maxDrawdown || 15.3,
-            volatility: data.results.volatility || 18.2,
-            sharpeRatio: data.results.sharpeRatio || 1.32,
-            beta: data.results.beta || 0.85,
-            sortinoRatio: data.results.sortinoRatio || 1.2,
-            downsideDeviation: data.results.downsideDeviation || 10.5,
-            treynorRatio: data.results.treynorRatio ?? undefined,
+            maxDrawdown: data.results.maxDrawdown ?? null,
+            volatility: data.results.volatility ?? null,
+            sharpeRatio: data.results.sharpeRatio ?? null,
+            beta: data.results.beta ?? null,
+            sortinoRatio: data.results.sortinoRatio ?? null,
+            downsideDeviation: data.results.downsideDeviation ?? null,
+            treynorRatio: data.results.treynorRatio ?? null,
             calmarRatio: data.results.calmarRatio ?? null,
           };
         }
@@ -554,16 +554,17 @@ const calculateRiskMetrics = async (portfolio: Portfolio, useRealCalculations: b
     }
   }
   
-  // Fallback to placeholder implementation
+  // Return null values when no real calculation available
+  // UI will check for null and show empty state
   return {
-    maxDrawdown: parseFloat((15.3).toFixed(2)), // 15.30%
-    volatility: parseFloat((18.2).toFixed(2)),   // 18.20% annualized
-    sharpeRatio: parseFloat((1.32).toFixed(2)),  // 1.32 (> 1 is good)
-    beta: parseFloat((0.85).toFixed(2)),         // 0.85 (< 1 means less volatile than market)
-    sortinoRatio: parseFloat((1.2).toFixed(2)),    // 1.2 (> 1 is good)
-    downsideDeviation: parseFloat((10.5).toFixed(2)), // 10.50%
-    treynorRatio: 0.1,
-    calmarRatio: 0.8,
+    maxDrawdown: null,
+    volatility: null,
+    sharpeRatio: null,
+    beta: null,
+    sortinoRatio: null,
+    downsideDeviation: null,
+    treynorRatio: null,
+    calmarRatio: null,
   };
 };
 
@@ -731,8 +732,10 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
   hasAnalysis: boolean;
   } | null> => {
   try {
-    // Import the risk tracking service to get latest metrics
+    // Import dependencies
     const { riskTrackingService } = await import('./riskTrackingService');
+    const { supabase } = await import('../lib/supabase');
+    
     // Validate portfolioId format before querying DB to avoid 22P02 errors
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(portfolioId)) {
@@ -757,9 +760,37 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
       };
     }
 
+    // Fetch chart URLs from database using the new RPC function
+    console.log('[VaR Charts] Fetching chart URLs for portfolio:', portfolioId);
+    const { data: chartData, error: chartError } = await supabase
+      .rpc('get_latest_var_charts', { p_portfolio_id: portfolioId });
+
+    if (chartError) {
+      console.error('[VaR Charts] Error fetching chart URLs:', chartError);
+    }
+
+    // Map chart URLs by model type
+    const chartUrls: Record<string, string | undefined> = {
+      parametric: undefined,
+      historical: undefined,
+      monte_carlo: undefined
+    };
+
+    if (chartData && chartData.length > 0) {
+      console.log('[VaR Charts] Found chart data:', chartData);
+      chartData.forEach((chart: any) => {
+        if (chart.chart_storage_url) {
+          // Normalize calc_type (handle both 'monte_carlo' and 'monte-carlo')
+          const normalizedType = chart.calc_type.replace('-', '_');
+          chartUrls[normalizedType] = chart.chart_storage_url;
+          console.log(`[VaR Charts] Loaded ${normalizedType} chart:`, chart.chart_storage_url.substring(0, 50) + '...');
+        }
+      });
+    } else {
+      console.log('[VaR Charts] No chart URLs found in database for portfolio:', portfolioId);
+    }
+
     // If we have recent VaR data, construct VaR results for display
-    // This is a simplified reconstruction - in a full implementation, 
-    // you'd store complete VaR results including charts
     const baseResults = {
       portfolioValue: 0, // This would need to be fetched from current portfolio value
       varValue: 0,
@@ -809,8 +840,7 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
     return {
       parametric: {
         ...baseResults,
-        // Don't set chartImageUrl - let it fall back to default server paths
-        chartImageUrl: undefined,
+        chartImageUrl: chartUrls.parametric,  // Use stored chart URL from database
         parameters: {
           ...baseResults.parameters,
           varMethod: 'parametric',
@@ -823,7 +853,7 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
         cvarPercentage: historicalCvarPct,
         varValue: baseResults.portfolioValue * (historicalVarPct / 100),
         cvarValue: baseResults.portfolioValue * (historicalCvarPct / 100),
-        chartImageUrl: undefined,
+        chartImageUrl: chartUrls.historical,  // Use stored chart URL from database
         parameters: {
           ...baseResults.parameters,
           varMethod: 'historical',
@@ -836,7 +866,7 @@ export const getLastVaRAnalysis = async (portfolioId: string): Promise<{
         cvarPercentage: monteCarloCvarPct,
         varValue: baseResults.portfolioValue * (monteCarloVarPct / 100),
         cvarValue: baseResults.portfolioValue * (monteCarloCvarPct / 100),
-        chartImageUrl: undefined,
+        chartImageUrl: chartUrls.monte_carlo,  // Use stored chart URL from database
         parameters: {
           ...baseResults.parameters,
           varMethod: 'monte_carlo',

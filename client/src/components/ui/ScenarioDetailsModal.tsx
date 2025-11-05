@@ -110,9 +110,11 @@ const ScenarioDetailsModal: React.FC<ScenarioDetailsModalProps> = ({
       
       switch (type) {
         case 'portfolio-impact':
-          // First try a simple test explanation
-          explanation = calculationExplanationService.getTestExplanation();
-          console.log('Using test explanation:', explanation);
+          explanation = calculationExplanationService.getPortfolioImpactExplanation(
+            mockResults,
+            mockResults.scenarioFactors
+          );
+          console.log('Generated portfolio-impact explanation:', explanation);
           break;
         case 'asset-class':
           explanation = calculationExplanationService.getAssetClassImpactExplanation(

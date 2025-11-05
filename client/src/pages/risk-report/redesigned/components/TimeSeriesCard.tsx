@@ -13,79 +13,8 @@ import { LineChart } from 'react-native-chart-kit';
 import { RiskMetrics, VaRResults } from '../../../../services/riskService';
 import { riskTrackingService } from '../../../../services/riskTrackingService';
 
-// Mock data service (replace with actual implementation)
-const fetchRiskTimeSeriesData = async (portfolioId: string, metric: MetricType, timeFrame: TimeFrame) => {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // Mock data for demonstration purposes - different data for each metric
-  const generateTimeSeriesData = (metric: MetricType, timeFrame: TimeFrame) => {
-    const getLabels = () => {
-      switch (timeFrame) {
-        case '1m': return ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-        case '3m': return ['Month 1', 'Month 2', 'Month 3'];
-        case '6m': return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-        case '1y': return ['Q1', 'Q2', 'Q3', 'Q4'];
-        case 'all': return ['2020', '2021', '2022', '2023', '2024'];
-        default: return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      }
-    };
-
-    const getData = () => {
-      switch (metric) {
-        case 'var':
-          switch (timeFrame) {
-            case '1m': return [1.8, 2.1, 1.9, 1.7];
-            case '3m': return [2.2, 1.9, 1.8];
-            case '6m': return [3.2, 3.5, 3.1, 3.7, 3.3, 1.8];
-            case '1y': return [2.8, 3.2, 2.9, 1.9];
-            case 'all': return [4.1, 3.8, 4.5, 3.2, 2.1];
-            default: return [3.2, 3.5, 3.1, 3.7, 3.3, 1.8];
-          }
-        case 'volatility':
-          switch (timeFrame) {
-            case '1m': return [16.2, 17.1, 16.8, 15.9];
-            case '3m': return [17.4, 16.2, 15.8];
-            case '6m': return [18.4, 17.9, 18.8, 19.2, 18.7, 16.2];
-            case '1y': return [19.1, 18.5, 17.8, 16.8];
-            case 'all': return [22.3, 19.8, 21.1, 18.4, 17.2];
-            default: return [18.4, 17.9, 18.8, 19.2, 18.7, 16.2];
-          }
-        case 'sharpe':
-          switch (timeFrame) {
-            case '1m': return [1.12, 1.18, 1.15, 1.22];
-            case '3m': return [1.08, 1.15, 1.21];
-            case '6m': return [0.95, 1.02, 0.98, 1.05, 1.12, 1.28];
-            case '1y': return [0.92, 1.08, 1.15, 1.24];
-            case 'all': return [0.78, 0.95, 0.88, 1.12, 1.31];
-            default: return [0.95, 1.02, 0.98, 1.05, 1.12, 1.28];
-          }
-        case 'beta':
-          switch (timeFrame) {
-            case '1m': return [0.82, 0.85, 0.83, 0.80];
-            case '3m': return [0.88, 0.84, 0.81];
-            case '6m': return [0.92, 0.89, 0.91, 0.94, 0.88, 0.82];
-            case '1y': return [0.95, 0.91, 0.87, 0.83];
-            case 'all': return [1.08, 0.98, 1.02, 0.89, 0.85];
-            default: return [0.92, 0.89, 0.91, 0.94, 0.88, 0.82];
-          }
-      }
-    };
-
-    return {
-      labels: getLabels(),
-      datasets: [
-        {
-          label: getMetricConfig(metric).label,
-          data: getData(),
-          color: () => getMetricConfig(metric).color,
-        }
-      ]
-    };
-  };
-
-  return generateTimeSeriesData(metric, timeFrame);
-};
+// REMOVED: Mock data function - No longer using fallback mock data
+// Users should see empty states when no real data exists
 
 // Helper function needed outside component
 const getMetricConfig = (metric: MetricType) => {
@@ -185,9 +114,8 @@ const TimeSeriesCard: React.FC<TimeSeriesCardProps> = ({
       setTimeSeriesData(data);
     } catch (error) {
       console.error('Error loading time series data:', error);
-      // Fallback to mock data if real data fails
-      const mockData = await fetchRiskTimeSeriesData(portfolioId, selectedMetric, selectedTimeFrame);
-      setTimeSeriesData(mockData);
+      // Set empty data on error
+      setTimeSeriesData(null);
     } finally {
       setLoading(false);
     }
@@ -341,6 +269,26 @@ const TimeSeriesCard: React.FC<TimeSeriesCardProps> = ({
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Loading risk data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show empty state when no data exists
+  if (!timeSeriesData || !timeSeriesData.datasets || timeSeriesData.datasets[0].data.length === 0) {
+    return (
+      <View style={[styles.container, detailed && styles.detailedContainer]}>
+        {!detailed && (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Risk Tracking</Text>
+          </View>
+        )}
+        <View style={styles.emptyContainer}>
+          <Ionicons name="trending-up-outline" size={48} color="#C7C7CC" />
+          <Text style={styles.emptyText}>No Risk Data Available</Text>
+          <Text style={styles.emptySubtext}>
+            Run a VaR analysis to start tracking risk metrics over time
+          </Text>
         </View>
       </View>
     );
@@ -726,6 +674,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4A4A4A',
     lineHeight: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    minHeight: 200,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#C7C7CC',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 

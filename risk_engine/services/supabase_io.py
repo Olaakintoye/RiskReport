@@ -455,6 +455,7 @@ class SupabaseService:
                 'cvar_percentage': results.get('cvar_percentage', 0),
                 'portfolio_value': results.get('portfolio_value', 0),
                 'chart_storage_url': chart_url,
+                'user_id': user_id,  # Add user_id for RLS policies
                 'parameters': json.dumps({
                     'confidence_level': results.get('confidence_level', 0.95),
                     'time_horizon': results.get('time_horizon', 1),

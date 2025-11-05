@@ -353,11 +353,11 @@ const RiskReportScreen: React.FC = () => {
   // Load last VaR analysis for a portfolio
   const loadLastVaRAnalysis = async (portfolioId: string) => {
     try {
-      console.log('Loading last VaR analysis for portfolio:', portfolioId);
+      console.log('[VaR] Loading last analysis for portfolio:', portfolioId);
       const lastAnalysis = await getLastVaRAnalysis(portfolioId);
       
       if (lastAnalysis && lastAnalysis.hasAnalysis) {
-        console.log('Found previous VaR analysis, loading results');
+        console.log('[VaR] Found previous VaR analysis in database, loading results');
         setVarResults({
           parametric: lastAnalysis.parametric,
           historical: lastAnalysis.historical,
@@ -368,21 +368,26 @@ const RiskReportScreen: React.FC = () => {
         // Force chart refresh to show the loaded data
         setChartRefreshTrigger(Date.now());
       } else {
-        console.log('No previous VaR analysis found for portfolio');
+        console.log('[VaR] No previous VaR analysis found in database');
+        
+        // Set all VaR results to null - no analysis exists
+        setVarResults({
+          parametric: null,
+          historical: null,
+          monteCarlo: null
+        });
         setHasLoadedLastAnalysis(false);
       }
     } catch (error) {
-      console.error('Error loading last VaR analysis:', error);
+      console.error('[VaR] Error loading last analysis:', error);
+      
+      // On error, assume no analysis exists
+      setVarResults({
+        parametric: null,
+        historical: null,
+        monteCarlo: null
+      });
       setHasLoadedLastAnalysis(false);
-      // Show a friendly message for brand-new portfolios or invalid IDs
-      const errMsg = (error as any)?.message || '';
-      if (errMsg.includes('invalid input syntax for type uuid') || errMsg.includes('Invalid portfolio ID')) {
-        Alert.alert(
-          'No Previous Analysis',
-          'This portfolio has no previous analysis yet. Run an analysis to generate initial results.',
-          [{ text: 'Run Analysis', onPress: () => setVarModalVisible(true) }, { text: 'OK' }]
-        );
-      }
     }
   };
 
@@ -472,56 +477,27 @@ const RiskReportScreen: React.FC = () => {
   // Calculate risk metrics for the selected portfolio
   const calculateRiskMetrics = async (portfolio: Portfolio) => {
     try {
-      // Calculate original portfolio value once to maintain consistency
-      const originalPortfolioValue = portfolio.assets.reduce(
-        (sum, asset) => sum + asset.price * asset.quantity, 
-        0
-      );
+      console.log('[RiskMetrics] Loading risk metrics for portfolio');
       
-      // Create VaR params with current lookback period
-      const varParams: VaRParams = {
-        ...DEFAULT_VAR_PARAMS,
-        lookbackPeriod: lookbackPeriod
-      };
+      // IMPORTANT: Do NOT run client-side VaR calculations here!
+      // VaR values should ONLY come from database via loadLastVaRAnalysis()
+      // This prevents showing calculated values before user runs analysis
       
-      // Calculate VaR but maintain consistent portfolio value
-      const parametricResults = riskService.calculateParametricVar(portfolio, varParams);
-      parametricResults.portfolioValue = originalPortfolioValue;
-      setVarResults(prev => ({
-        ...prev,
-        parametric: parametricResults
-      }));
-      
-      const historicalResults = riskService.calculateHistoricalVar(portfolio, varParams);
-      historicalResults.portfolioValue = originalPortfolioValue;
-      setVarResults(prev => ({
-        ...prev,
-        historical: historicalResults
-      }));
-      
-      const monteCarloResults = riskService.calculateMonteCarloVar(portfolio, varParams);
-      monteCarloResults.portfolioValue = originalPortfolioValue;
-      setVarResults(prev => ({
-        ...prev,
-        monteCarlo: monteCarloResults
-      }));
-      
-      // Calculate Greeks and additional metrics
+      // Calculate Greeks (if needed for display)
       setGreeks(riskService.calculateGreeks(portfolio));
       
-      // Use real calculations for risk metrics if available, otherwise fallback
-      const metrics = await riskService.calculateRiskMetrics(portfolio, true); // Enable real calculations
+      // Calculate risk metrics (now returns null for metrics without analysis)
+      // This will return null values until Python backend analysis is run
+      const metrics = await riskService.calculateRiskMetrics(portfolio, true);
       setRiskMetrics(metrics);
       
-      // Check for risk threshold breaches
-      notificationService.checkRiskMetrics(portfolio, metrics, parametricResults)
-        .then((newAlerts: AlertHistoryItem[]) => {
-          if (newAlerts.length > 0) console.log(`${newAlerts.length} risk threshold alerts generated`);
-        })
-        .catch((error: Error) => console.error('Error checking risk thresholds:', error));
+      console.log('[RiskMetrics] Risk metrics loaded:', {
+        hasMetrics: !!metrics,
+        volatility: metrics?.volatility,
+        sharpe: metrics?.sharpeRatio
+      });
     } catch (error) {
-      console.error('Error calculating risk metrics:', error);
-      Alert.alert('Error', 'Failed to calculate risk metrics. Please try again.');
+      console.error('[RiskMetrics] Error calculating risk metrics:', error);
     }
   };
   
@@ -962,12 +938,14 @@ const RiskReportScreen: React.FC = () => {
         />
 
         {/* Risk Tracking Graph Section */}
-        <TimeSeriesCard
-          portfolioId={selectedPortfolioSummary?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'}
-          onViewMore={() => handleShowDetailView('timeSeries')}
-          riskMetrics={riskMetrics}
-          varResults={varResults.parametric}
-        />
+        {selectedPortfolioSummary && (
+          <TimeSeriesCard
+            portfolioId={selectedPortfolioSummary.id}
+            onViewMore={() => handleShowDetailView('timeSeries')}
+            riskMetrics={riskMetrics}
+            varResults={varResults.parametric}
+          />
+        )}
 
         {/* Risk Monitoring */}
         <RiskTracker

@@ -45,6 +45,9 @@ import ActionableRecommendations from '../../components/portfolio/ActionableReco
 import GoalBasedTracking from '../../components/portfolio/GoalBasedTracking';
 import EnhancedPortfolioItem from '../../components/portfolio/EnhancedPortfolioItem';
 
+// Import spacing constants
+import { SPACING } from '../../constants/spacing';
+
 // Types for enhanced features
 interface ViewMode {
   type: 'simple' | 'advanced';
